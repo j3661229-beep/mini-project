@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+db.sqlite3
+.env
+backend/tmp_clones/
+backend/staticfiles/
+backend/frontend/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+node_modules/
+frontend/dist/
+.DS_Store
