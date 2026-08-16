@@ -1,12 +1,17 @@
+from collections import defaultdict
+
 from django.conf import settings
+from django.db import models as db_models
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import CursorPagination
 from rest_framework.response import Response
 
 from analysis.engines.review_graph import compute_review_graph
+
 from repositories.models import (
     Commit,
+    CommitFile,
     FileOwnership,
     PRReview,
     PullRequestFile,
@@ -61,6 +66,10 @@ class CommitCursorPagination(CursorPagination):
     cursor_query_param = "cursor"
 
 
+class RepoCursorPagination(CursorPagination):
+    ordering = "-created_at"
+
+
 class RepositoryViewSet(
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
@@ -69,6 +78,7 @@ class RepositoryViewSet(
 ):
     queryset = Repository.objects.all()
     serializer_class = RepositorySerializer
+    pagination_class = RepoCursorPagination
 
     def create(self, request, *args, **kwargs):
         serializer = RepositoryCreateSerializer(data=request.data)
@@ -249,7 +259,7 @@ class RepositoryViewSet(
     @action(detail=True, methods=["get"], url_path="symbols")
     def symbols(self, request, pk=None):
         repo = self.get_object()
-        qs = CodeSymbol.objects.filter(parsing__source_content__sourcefile__repository=repo).distinct().order_by("id")
+        qs = CodeSymbol.objects.filter(parsing__source_content__files__repository=repo).distinct().order_by("id")
         
         paginator = CursorPagination()
         paginator.ordering = "id"
@@ -260,7 +270,7 @@ class RepositoryViewSet(
     @action(detail=True, methods=["get"], url_path="imports")
     def imports(self, request, pk=None):
         repo = self.get_object()
-        qs = CodeImport.objects.filter(parsing__source_content__sourcefile__repository=repo).distinct().order_by("id")
+        qs = CodeImport.objects.filter(parsing__source_content__files__repository=repo).distinct().order_by("id")
         
         paginator = CursorPagination()
         paginator.ordering = "id"
@@ -294,9 +304,10 @@ class RepositoryViewSet(
         # tied to the repo. A more precise metric would scope to a specific commit.
         # But this suffices for an overall repository view.
         parsings = CodeParsing.objects.filter(
-            source_content__sourcefile__repository=repo,
+            source_content__files__repository=repo,
             parse_status="parsed"
         ).distinct()
+
         
         total_loc = 0
         total_classes = 0
@@ -375,3 +386,76 @@ class RepositoryViewSet(
             import logging
             logging.error(f"Semantic search DB error: {e}")
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=["get"], url_path="heatmap")
+    def heatmap(self, request, pk=None):
+        """
+        Returns a file-author churn matrix for the top 50 most active files.
+
+        Response shape:
+          {
+            "files": ["path/to/file.py", ...],          # y-axis labels
+            "authors": ["Alice", "Bob", ...],            # x-axis labels
+            "cells": [                                   # all non-zero cells
+              {"file": "path/to/file.py", "author": "Alice", "churn": 420},
+              ...
+            ]
+          }
+        """
+        repo = self.get_object()
+
+        # 1. Identify the top-50 files by total churn
+        top_files_qs = (
+            FileOwnership.objects.filter(repository=repo)
+            .order_by("-total_churn")
+            .values_list("file_path", "total_churn")[:50]
+        )
+        top_file_paths = [row[0] for row in top_files_qs]
+
+        if not top_file_paths:
+            return Response({"files": [], "authors": [], "cells": []})
+
+        # 2. Aggregate CommitFile churn per (file_path, author_name) for those files
+        rows = (
+            CommitFile.objects.filter(
+                commit__repository=repo,
+                file_path__in=top_file_paths,
+            )
+            .values("file_path", "commit__author_name")
+            .annotate(
+                churn=db_models.Sum(db_models.F("insertions") + db_models.F("deletions"))
+            )
+        )
+
+        # 3. Build the matrix
+        churn_map: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        authors_set: set[str] = set()
+
+        for row in rows:
+            fp = row["file_path"]
+            author = row["commit__author_name"] or "unknown"
+            churn = int(row["churn"] or 0)
+            if churn > 0:
+                churn_map[fp][author] += churn
+                authors_set.add(author)
+
+        # Sort authors by total contribution (descending)
+        author_totals = {
+            a: sum(churn_map[fp].get(a, 0) for fp in top_file_paths)
+            for a in authors_set
+        }
+        sorted_authors = sorted(author_totals, key=lambda a: -author_totals[a])
+
+        cells = []
+        for fp in top_file_paths:
+            for author, churn in churn_map.get(fp, {}).items():
+                if churn > 0:
+                    cells.append({"file": fp, "author": author, "churn": churn})
+
+        return Response(
+            {
+                "files": top_file_paths,
+                "authors": sorted_authors,
+                "cells": cells,
+            }
+        )

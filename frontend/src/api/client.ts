@@ -140,3 +140,110 @@ export function getOwnership(id: number, riskOnly = false) {
 export function getReviews(id: number) {
   return request<ReviewGraph>(`/repositories/${id}/reviews/`);
 }
+
+export interface HeatmapCell {
+  file: string;
+  author: string;
+  churn: number;
+}
+
+export interface HeatmapResponse {
+  files: string[];
+  authors: string[];
+  cells: HeatmapCell[];
+}
+
+export function getHeatmap(id: number) {
+  return request<HeatmapResponse>(`/repositories/${id}/heatmap/`);
+}
+
+// ── Repositories list ────────────────────────────────
+export function getRepositories() {
+  return request<Repository[]>("/repositories/");
+}
+
+// ── Code metrics ─────────────────────────────────────
+export interface CodeMetrics {
+  total_loc: number;
+  total_classes: number;
+  total_functions: number;
+  total_methods: number;
+  total_imports: number;
+  parsed_files: number;
+}
+export function getCodeMetrics(id: number) {
+  return request<CodeMetrics>(`/repositories/${id}/code-metrics/`);
+}
+
+// ── Source files ──────────────────────────────────────
+export interface SourceFile {
+  id: number;
+  commit_hash: string;
+  file_path: string;
+  status: string;
+  previous_path: string;
+  language: string;
+  hash: string;
+  size: number;
+  is_binary: boolean;
+  is_skipped_size: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface SourceFileDetail extends SourceFile {
+  content: string;
+}
+export interface PaginatedSourceFiles {
+  next: string | null;
+  previous: string | null;
+  results: SourceFile[];
+}
+export function getFiles(id: number, cursor?: string | null) {
+  const q = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+  return request<PaginatedSourceFiles>(`/repositories/${id}/files/${q}`);
+}
+export function getFileDetail(id: number, fileId: number) {
+  return request<SourceFileDetail>(`/repositories/${id}/files/${fileId}/`);
+}
+
+// ── Symbols ───────────────────────────────────────────
+export interface CodeSymbol {
+  id: number;
+  symbol_type: string;
+  name: string;
+  qualified_name: string;
+  signature: string;
+  start_line: number;
+  end_line: number;
+  start_column: number;
+  end_column: number;
+  parent: number | null;
+}
+export interface PaginatedSymbols {
+  next: string | null;
+  previous: string | null;
+  results: CodeSymbol[];
+}
+export function getFileSymbols(repoId: number, fileId: number) {
+  return request<PaginatedSymbols>(`/repositories/${repoId}/files/${fileId}/symbols/`);
+}
+
+// ── Semantic search ───────────────────────────────────
+export interface SemanticResult {
+  id: number;
+  file_path: string | null;
+  symbol_name: string;
+  chunk_type: string;
+  start_line: number | null;
+  end_line: number | null;
+  similarity: number;
+  chunk_text_snippet: string;
+}
+export interface SemanticSearchResponse {
+  results: SemanticResult[];
+}
+export function semanticSearch(id: number, q: string, topK = 20) {
+  return request<SemanticSearchResponse>(
+    `/repositories/${id}/semantic-search/?q=${encodeURIComponent(q)}&top_k=${topK}`
+  );
+}

@@ -25,82 +25,103 @@ export function BusFactorPanel({ ownership }: BusFactorPanelProps) {
   const riskCount = ownership.filter((o) => o.bus_factor_risk).length;
 
   return (
-    <section className="animate-fade-up">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+    <section>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "12px" }}>
         <div>
-          <h2 className="font-display text-xl font-bold">Bus factor</h2>
-          <p className="text-sm text-[var(--color-slate)]">
-            Files where one contributor owns ≥80% of churn — single-owner risk.
+          <p style={{ margin: 0, fontSize: "12px", color: "var(--color-muted)" }}>
             {riskCount > 0 && (
-              <span className="ml-1 text-[var(--color-coral)]">{riskCount} at risk</span>
+              <span style={{ color: "var(--color-red)", fontWeight: 600 }}>{riskCount} at-risk · </span>
             )}
+            Files where one contributor owns ≥80% of churn.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <label className="flex items-center gap-1.5">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--color-muted)", cursor: "pointer" }}>
             <input
               type="checkbox"
               checked={riskOnly}
               onChange={(e) => setRiskOnly(e.target.checked)}
-              className="accent-[var(--color-coral)]"
             />
             At-risk only
           </label>
           <select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="rounded border border-[var(--color-moss)]/20 bg-white px-2 py-1"
+            style={{ fontSize: "12px", padding: "3px 8px" }}
           >
-            <option value="share">Sort: ownership</option>
-            <option value="churn">Sort: churn</option>
-            <option value="path">Sort: path</option>
+            <option value="share">Ownership %</option>
+            <option value="churn">Total churn</option>
+            <option value="path">Path</option>
           </select>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-[var(--color-moss)]/10 bg-white/70">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-[var(--color-moss)]/10 bg-[var(--color-foam)]/40 font-mono text-[11px] uppercase tracking-wider text-[var(--color-slate)]">
-            <tr>
-              <th className="px-3 py-2">File</th>
-              <th className="px-3 py-2">Owner</th>
-              <th className="px-3 py-2">Share</th>
-              <th className="px-3 py-2">Churn</th>
+      <div style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "8px", overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+          <thead>
+            <tr style={{ borderBottom: "1px solid var(--color-border)" }}>
+              {["File", "Top Owner", "Ownership", "Churn"].map((h) => (
+                <th
+                  key={h}
+                  style={{
+                    padding: "8px 12px",
+                    textAlign: "left",
+                    fontSize: "10px",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                    color: "var(--color-muted)",
+                    background: "var(--color-surface-2)",
+                  }}
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-6 text-center text-[var(--color-slate)]">
-                  No at-risk files in this sample.
+                <td colSpan={4} style={{ padding: "32px", textAlign: "center", color: "var(--color-muted)", fontSize: "13px" }}>
+                  {riskOnly ? "No at-risk files in this repository." : "No file ownership data available."}
                 </td>
               </tr>
             )}
             {rows.map((r) => (
               <tr
                 key={r.file_path}
-                className="border-b border-[var(--color-moss)]/5 hover:bg-[var(--color-foam)]/30"
+                style={{ borderBottom: "1px solid var(--color-border)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--color-surface-2)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "")}
               >
-                <td className="max-w-[280px] truncate px-3 py-2 font-mono text-xs" title={r.file_path}>
-                  {r.file_path}
+                <td style={{ padding: "9px 12px", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-text)" }} title={r.file_path}>
+                    {r.file_path}
+                  </span>
                 </td>
-                <td className="px-3 py-2">{r.top_contributor}</td>
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-20 overflow-hidden rounded bg-[var(--color-foam)]">
+                <td style={{ padding: "9px 12px", color: "var(--color-muted)", fontSize: "12px" }}>
+                  {r.top_contributor}
+                </td>
+                <td style={{ padding: "9px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ width: 72, height: 4, background: "var(--color-border)", borderRadius: 2, overflow: "hidden" }}>
                       <div
-                        className={`h-full ${
-                          r.bus_factor_risk ? "bg-[var(--color-coral)]" : "bg-[var(--color-mint)]"
-                        }`}
-                        style={{ width: `${Math.round(r.top_contributor_share * 100)}%` }}
+                        style={{
+                          width: `${Math.round(r.top_contributor_share * 100)}%`,
+                          height: "100%",
+                          background: r.bus_factor_risk ? "var(--color-red)" : "var(--color-green)",
+                          borderRadius: 2,
+                        }}
                       />
                     </div>
-                    <span className="font-mono text-xs">
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: r.bus_factor_risk ? "var(--color-red)" : "var(--color-text)", fontWeight: 600 }}>
                       {Math.round(r.top_contributor_share * 100)}%
                     </span>
                   </div>
                 </td>
-                <td className="px-3 py-2 font-mono text-xs">{r.total_churn}</td>
+                <td style={{ padding: "9px 12px", fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--color-muted)" }}>
+                  {r.total_churn.toLocaleString()}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -23,6 +23,12 @@ def generate_embeddings(texts: List[str]) -> List[List[float]]:
     """
     if not texts:
         return []
+    
+    if not getattr(settings, "OPENAI_API_KEY", None):
+        # Mock embeddings to prevent crashing when no API key is configured
+        dimension = 1536  # text-embedding-3-small dimension
+        return [[0.0] * dimension for _ in texts]
+
         
     provider = getattr(settings, "EMBEDDING_PROVIDER", "openai").lower()
     model = getattr(settings, "EMBEDDING_MODEL", "text-embedding-3-small")
