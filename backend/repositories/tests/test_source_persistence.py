@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from repositories.models import (
     Repository, Commit, SourceContent, SourceFile, 
-    PullRequest, PullRequestFile
+    PullRequest, PullRequestFile, FileOwnership
 )
 from repositories.services.git_ingest import ParsedCommit, ParsedCommitFile, ParsedSourceFile
 from repositories.services.github_ingest import ParsedPullRequest, ParsedPullRequestFile
@@ -143,3 +143,50 @@ def test_source_api_endpoints(repo, client):
     resp = client.get(f"/api/repositories/{repo.id}/commits/commit1/files/")
     assert resp.status_code == 200
     assert len(resp.data["results"]) == 1
+
+@pytest.mark.django_db
+def test_risk_report_exports_existing_repository_data(repo, client):
+    Commit.objects.create(
+        repository=repo, hash="report1", author_name="alice", author_email="alice@test.com",
+        committed_at=datetime.now(timezone.utc), message="report", branch="main",
+    )
+    FileOwnership.objects.create(
+        repository=repo, file_path="src/core.py", top_contributor="alice",
+        top_contributor_share=0.9, bus_factor_risk=True, contributor_count=1, total_churn=42,
+    )
+
+    response = client.get(f"/api/repositories/{repo.id}/risk-report/")
+
+    assert response.status_code == 200
+    assert response.data["repository"]["id"] == repo.id
+    assert response.data["summary"]["at_risk_file_count"] == 1
+    assert response.data["file_ownership"][0]["file_path"] == "src/core.py"
+    assert "attachment; filename=\"gitpulse-risk-report" in response["Content-Disposition"]
+@pytest.mark.django_db
+def test_duplicate_completed_repository_is_not_requeued(repo, client):
+    repo.github_url = "https://github.com/test/repo"
+    repo.status = Repository.Status.COMPLETE
+    repo.ingestion_stage = "complete"
+    repo.save(update_fields=["github_url", "status", "ingestion_stage"])
+
+    with patch("repositories.views.enqueue_ingestion") as enqueue:
+        response = client.post("/api/repositories/", {"github_url": repo.github_url}, format="json")
+
+    assert response.status_code == 200
+    repo.refresh_from_db()
+    assert repo.status == Repository.Status.COMPLETE
+    assert repo.ingestion_stage == "complete"
+    enqueue.assert_not_called()
+@pytest.mark.django_db
+def test_risk_report_pdf_exports_a_pdf(repo, client):
+    FileOwnership.objects.create(
+        repository=repo, file_path="src/core.py", top_contributor="alice",
+        top_contributor_share=0.9, bus_factor_risk=True, contributor_count=1, total_churn=42,
+    )
+
+    response = client.get(f"/api/repositories/{repo.id}/risk-report/pdf/")
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+    assert "attachment; filename=\"gitpulse-risk-report" in response["Content-Disposition"]

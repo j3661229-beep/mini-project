@@ -1,199 +1,23 @@
 import { useMemo, useState } from "react";
-import type { HeatmapResponse } from "../api/client";
+import type { FileOwnership, HeatmapResponse } from "../api/client";
 
-interface Props {
-  data: HeatmapResponse;
-}
+interface Props { data: HeatmapResponse; ownership?: FileOwnership[]; }
+const MAX_AUTHORS = 15; const MAX_FILES = 40;
+const basename = (path: string) => path.split("/").pop() ?? path;
+const initials = (name: string) => name.slice(0, 2).toUpperCase();
 
-const MAX_AUTHORS = 15;
-const MAX_FILES = 40;
-const CELL_MIN_PX = 28;
-
-function basename(path: string) {
-  return path.split("/").pop() ?? path;
-}
-
-export function HeatmapPanel({ data }: Props) {
-  const [tooltip, setTooltip] = useState<{
-    file: string;
-    author: string;
-    churn: number;
-    x: number;
-    y: number;
-  } | null>(null);
+export function HeatmapPanel({ data, ownership = [] }: Props) {
+  const [tooltip, setTooltip] = useState<{ file:string; author:string; churn:number; x:number; y:number } | null>(null);
   const [showAll, setShowAll] = useState(false);
-
-  // Slice to visible window
-  const visibleAuthors = data.authors.slice(0, MAX_AUTHORS);
-  const visibleFiles = showAll ? data.files.slice(0, MAX_FILES) : data.files.slice(0, 20);
-
-  // Build lookup: {file -> {author -> churn}}
-  const lookup = useMemo(() => {
-    const map: Record<string, Record<string, number>> = {};
-    for (const cell of data.cells) {
-      if (!map[cell.file]) map[cell.file] = {};
-      map[cell.file][cell.author] = cell.churn;
-    }
-    return map;
-  }, [data.cells]);
-
-  // Find max churn for scaling
-  const maxChurn = useMemo(() => {
-    return Math.max(1, ...data.cells.map((c) => c.churn));
-  }, [data.cells]);
-
-  function intensity(churn: number): number {
-    return churn / maxChurn;
-  }
-
-  function cellColor(churn: number): string {
-    const alpha = Math.max(0.06, intensity(churn));
-    // Moss green: hsl(150, 60%, 40%)
-    const lightness = Math.round(80 - alpha * 55);
-    const saturation = Math.round(30 + alpha * 50);
-    return `hsl(148, ${saturation}%, ${lightness}%)`;
-  }
-
-  if (!data.files.length || !data.authors.length) {
-    return (
-      <div className="flex h-40 items-center justify-center rounded-xl border border-white/10 bg-white/5">
-        <p className="text-sm text-[var(--color-slate)]">
-          No file churn data available yet.
-        </p>
-      </div>
-    );
-  }
-
-  const cellSize = Math.max(CELL_MIN_PX, Math.floor(560 / visibleAuthors.length));
-
-  return (
-    <section className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold text-[var(--color-leaf)]">
-          Contributor Heatmap
-        </h2>
-        <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-[var(--color-slate)]">
-          Top {visibleAuthors.length} contributors · {visibleFiles.length} files
-        </span>
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-white/10 bg-[#0d1117] p-4">
-        {/* Tooltip */}
-        {tooltip && (
-          <div
-            className="pointer-events-none fixed z-50 rounded-lg border border-white/20 bg-[#1c2333] px-3 py-2 text-xs shadow-2xl"
-            style={{ left: tooltip.x + 14, top: tooltip.y - 40 }}
-          >
-            <p className="font-semibold text-white">{basename(tooltip.file)}</p>
-            <p className="text-[var(--color-slate)]">
-              {tooltip.author}:{" "}
-              <span className="text-[var(--color-leaf)] font-bold">
-                {tooltip.churn.toLocaleString()} lines
-              </span>
-            </p>
-          </div>
-        )}
-
-        <table className="border-separate border-spacing-[2px]" style={{ minWidth: cellSize * visibleAuthors.length + 200 }}>
-          <thead>
-            <tr>
-              {/* corner */}
-              <th className="w-[190px] pr-3 text-right text-xs font-normal text-[var(--color-slate)]">
-                file / author →
-              </th>
-              {visibleAuthors.map((author) => (
-                <th
-                  key={author}
-                  className="pb-2 text-center align-bottom"
-                  style={{ width: cellSize, maxWidth: cellSize }}
-                  title={author}
-                >
-                  <span
-                    className="block truncate text-[10px] text-[var(--color-slate)]"
-                    style={{
-                      writingMode: "vertical-rl",
-                      transform: "rotate(180deg)",
-                      maxHeight: 80,
-                    }}
-                  >
-                    {author}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {visibleFiles.map((file) => (
-              <tr key={file}>
-                <td
-                  className="pr-3 text-right text-[11px] text-[var(--color-slate)] hover:text-white transition-colors"
-                  title={file}
-                  style={{ maxWidth: 190 }}
-                >
-                  <span className="block truncate" style={{ direction: "rtl", unicodeBidi: "plaintext" }}>
-                    {file}
-                  </span>
-                </td>
-                {visibleAuthors.map((author) => {
-                  const churn = lookup[file]?.[author] ?? 0;
-                  return (
-                    <td
-                      key={author}
-                      onMouseEnter={(e) =>
-                        churn > 0 &&
-                        setTooltip({
-                          file,
-                          author,
-                          churn,
-                          x: e.clientX,
-                          y: e.clientY,
-                        })
-                      }
-                      onMouseMove={(e) =>
-                        churn > 0 &&
-                        setTooltip((prev) =>
-                          prev ? { ...prev, x: e.clientX, y: e.clientY } : prev
-                        )
-                      }
-                      onMouseLeave={() => setTooltip(null)}
-                      style={{
-                        width: cellSize,
-                        height: CELL_MIN_PX,
-                        backgroundColor: churn > 0 ? cellColor(churn) : "rgba(255,255,255,0.03)",
-                        cursor: churn > 0 ? "crosshair" : "default",
-                        borderRadius: 4,
-                        transition: "background-color 0.15s ease",
-                      }}
-                      title={churn > 0 ? `${author} — ${churn.toLocaleString()} lines` : undefined}
-                    />
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Legend */}
-        <div className="mt-4 flex items-center gap-3">
-          <span className="text-xs text-[var(--color-slate)]">Less</span>
-          {[0.06, 0.25, 0.5, 0.75, 1].map((v) => (
-            <div
-              key={v}
-              className="h-4 w-4 rounded-sm"
-              style={{ backgroundColor: cellColor(v * maxChurn) }}
-            />
-          ))}
-          <span className="text-xs text-[var(--color-slate)]">More</span>
-          {data.files.length > 20 && (
-            <button
-              onClick={() => setShowAll((s) => !s)}
-              className="ml-auto text-xs text-[var(--color-moss)] underline-offset-2 hover:underline transition-all"
-            >
-              {showAll ? "Show fewer files" : `Show all ${Math.min(data.files.length, MAX_FILES)} files`}
-            </button>
-          )}
-        </div>
-      </div>
-    </section>
-  );
+  const authors = data.authors.slice(0, MAX_AUTHORS);
+  const files = (showAll ? data.files : data.files.slice(0, 20)).slice(0, MAX_FILES);
+  const lookup = useMemo(() => Object.fromEntries(data.files.map(file => [file, {} as Record<string, number>])), [data.files]);
+  data.cells.forEach(cell => { if (lookup[cell.file]) lookup[cell.file][cell.author] = cell.churn; });
+  const max = Math.max(1, ...data.cells.map(cell => cell.churn));
+  const totals = useMemo(() => Object.fromEntries(authors.map(author => [author, data.cells.filter(cell => cell.author === author).reduce((sum, cell) => sum + cell.churn, 0)])), [authors, data.cells]);
+  const totalChurn = Math.max(1, Object.values(totals).reduce((sum, value) => sum + value, 0));
+  const risk = useMemo(() => new Map(ownership.filter(item => item.bus_factor_risk).map(item => [item.file_path, item])), [ownership]);
+  const color = (value:number) => `hsl(351, ${45 + Math.round(value / max * 35)}%, ${Math.round(12 + value / max * 35)}%)`;
+  if (!files.length || !authors.length) return <div className="heatmap-shell" style={{padding:40,textAlign:"center",color:"var(--color-muted)"}}>No file churn data available yet.</div>;
+  return <section className="heatmap-shell"><header style={{padding:"18px 20px 12px",display:"flex",justifyContent:"space-between",gap:12,alignItems:"start"}}><div><h2 style={{margin:0,fontSize:16}}>Contributor Heatmap</h2><p style={{margin:"4px 0 0",fontSize:12,color:"var(--color-muted)"}}>Contribution intensity by file and author. Warning marks existing single-owner risk.</p></div><button onClick={()=>setShowAll(value=>!value)} style={{background:"var(--color-surface-2)",border:"1px solid var(--color-border)",color:"var(--color-text)",borderRadius:999,padding:"6px 10px",fontSize:11}}>{showAll ? "Top files" : `Show ${Math.min(data.files.length, MAX_FILES)} files`}</button></header><div style={{overflowX:"auto",padding:"8px 20px 18px",position:"relative"}}>{tooltip && <div style={{position:"fixed",left:Math.min(tooltip.x+14,window.innerWidth-240),top:Math.max(12,tooltip.y-92),zIndex:30,padding:12,borderRadius:9,border:"1px solid var(--color-border)",background:"#1b1717",boxShadow:"0 14px 35px #0008",fontSize:12,pointerEvents:"none"}}><b>{tooltip.file}</b><p style={{margin:"7px 0 2px",color:"var(--color-muted)"}}>Contributor <strong style={{color:"var(--color-text)"}}>{tooltip.author}</strong></p><p style={{margin:0,color:"var(--color-red)"}}>{tooltip.churn.toLocaleString()} changed lines{risk.has(tooltip.file) ? " Â· single-owner risk" : ""}</p></div>}<table style={{borderSpacing:4,borderCollapse:"separate",minWidth:authors.length*52+220,width:"100%"}}><thead><tr><th style={{minWidth:190,textAlign:"left",color:"var(--color-muted)",fontSize:11}}>File / contributor</th>{authors.map(author=><th key={author} title={author} style={{minWidth:48,textAlign:"center",fontSize:10,color:"var(--color-muted)"}}><span style={{display:"grid",placeItems:"center",margin:"auto auto 5px",width:24,height:24,borderRadius:"50%",background:"#ffffff0d",color:"var(--color-red)",fontWeight:800}}>{initials(author)}</span><span style={{display:"block",maxWidth:52,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{author}</span><small style={{color:"#756969"}}>{Math.round((totals[author]/totalChurn)*100)}%</small></th>)}</tr></thead><tbody>{files.map(file=><tr className="heatmap-row" key={file}><td title={file} style={{fontSize:11,color:"var(--color-muted)",maxWidth:190,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{risk.has(file) && <span title="Existing bus-factor risk" style={{color:"var(--color-yellow)",marginRight:5}}>{"\u26A0"}</span>}{basename(file)}</td>{authors.map(author=>{const churn=lookup[file]?.[author]??0;return <td key={author} className="heatmap-cell" onMouseEnter={event=>churn&&setTooltip({file,author,churn,x:event.clientX,y:event.clientY})} onMouseMove={event=>churn&&setTooltip(previous=>previous?{...previous,x:event.clientX,y:event.clientY}:previous)} onMouseLeave={()=>setTooltip(null)} style={{height:30,minWidth:48,borderRadius:6,background:churn?color(churn):"#ffffff06",cursor:churn?"crosshair":"default"}}/>})}</tr>)}</tbody></table><div style={{marginTop:14,display:"flex",alignItems:"center",gap:8,fontSize:11,color:"var(--color-muted)"}}><b style={{color:"var(--color-text)"}}>Changed lines</b><span>Low</span>{[.08,.25,.5,.75,1].map(value=><i key={value} style={{width:18,height:10,borderRadius:3,background:color(value*max)}}/>)}<span>High</span><span style={{marginLeft:10,color:"var(--color-yellow)"}}>{"\u26A0"} existing bus-factor risk</span></div></div></section>;
 }

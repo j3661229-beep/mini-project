@@ -49,11 +49,15 @@ def test_repository_scoping(repo, code_parsing):
         
     CodeChunk.objects.all().update(embedding_status=CodeChunk.EmbeddingStatus.EMBEDDED, embedding=[0.1, 0.2])
     
+    # Read the real, repository-scoped chunks before replacing the view queryset.
+    mocked_chunks = list(CodeChunk.objects.filter(code_parsing=code_parsing))
+    for c in mocked_chunks:
+        c.similarity = 0.95
+
     client = APIClient()
     with patch("repositories.views.CodeChunk.objects.filter") as mock_filter:
         mock_qs = mock_filter.return_value
-        # Mocking to return only chunks from repo1
-        mocked_chunks = list(CodeChunk.objects.filter(code_parsing=code_parsing))
+        # Mock the database-specific vector queryset with only repo1 chunks.
         for c in mocked_chunks:
             c.similarity = 0.95
         mock_qs.annotate.return_value.order_by.return_value.__getitem__.return_value = mocked_chunks

@@ -19,6 +19,10 @@ class Repository(models.Model):
         default=Status.PENDING,
     )
     error_message = models.TextField(blank=True, null=True)
+    ingestion_stage = models.CharField(max_length=32, default="queued")
+    ingestion_progress = models.JSONField(default=dict, blank=True)
+    ingestion_stage_started_at = models.DateTimeField(null=True, blank=True)
+    ingestion_heartbeat_at = models.DateTimeField(null=True, blank=True)
     last_ingested_at = models.DateTimeField(null=True, blank=True)
     commit_cap_reached = models.BooleanField(default=False)
     ingestion_locked_at = models.DateTimeField(null=True, blank=True, default=None)
@@ -124,7 +128,7 @@ class PRReview(models.Model):
 
 
 class FileOwnership(models.Model):
-    """Precomputed by the analysis engine — one row per file per repo."""
+    """Precomputed by the analysis engine â€” one row per file per repo."""
 
     repository = models.ForeignKey(
         Repository,
