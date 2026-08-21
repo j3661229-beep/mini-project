@@ -1,4 +1,4 @@
-"""Celery ingestion pipeline for repositories — incremental & non-destructive."""
+"""Celery ingestion pipeline for repositories â€” incremental & non-destructive."""
 
 from __future__ import annotations
 
@@ -36,7 +36,31 @@ from repositories.services.github_ingest import fetch_pull_requests
 
 logger = logging.getLogger(__name__)
 
-# Stale lock threshold — if a lock is older than this, consider it abandoned.
+def _update_ingestion(
+    repo: Repository,
+    *,
+    stage: str | None = None,
+    processed: int | None = None,
+    total: int | None = None,
+    detail: str | None = None,
+) -> None:
+    """Persist worker-owned progress for the status API without inventing totals."""
+    now = timezone.now()
+    stage_changed = bool(stage and stage != repo.ingestion_stage)
+    progress = {} if stage_changed else dict(repo.ingestion_progress or {})
+    if stage_changed:
+        repo.ingestion_stage = stage
+        repo.ingestion_stage_started_at = now
+    if processed is not None:
+        progress["processed"] = processed
+    if total is not None:
+        progress["total"] = total
+    if detail is not None:
+        progress["detail"] = detail
+    repo.ingestion_progress = progress
+    repo.ingestion_heartbeat_at = now
+    repo.save(update_fields=["ingestion_stage", "ingestion_progress", "ingestion_stage_started_at", "ingestion_heartbeat_at"])
+# Stale lock threshold â€” if a lock is older than this, consider it abandoned.
 LOCK_STALE_MINUTES = 30
 
 
@@ -84,38 +108,56 @@ def ingest_repository(self, repo_id: int) -> dict:
         logger.error("Repository %s does not exist", repo_id)
         return {"ok": False, "error": "not_found"}
 
-    # ── Step 1: Acquire concurrency lock ──────────────────────────────
+    # â”€â”€ Step 1: Acquire concurrency lock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not _acquire_lock(repo_id):
         logger.warning(
-            "Ingestion already in progress for repo %s — skipping", repo_id
+            "Ingestion already in progress for repo %s â€” skipping", repo_id
         )
         return {"ok": False, "error": "ingestion_already_running"}
 
     clone_path = None
     repo.status = Repository.Status.PROCESSING
     repo.error_message = None
-    repo.save(update_fields=["status", "error_message"])
+    repo.ingestion_stage = "queued"
+    repo.save(update_fields=["status", "ingestion_stage", "error_message"])
+    _update_ingestion(repo, stage="cloning", detail="Preparing an isolated clone workspace.")
 
     try:
-        # ── Step 2: Determine which commits we already have ───────────
+        # â”€â”€ Step 2: Determine which commits we already have â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         existing_hashes = set(
             Commit.objects.filter(repository=repo).values_list("hash", flat=True)
         )
 
-        # ── Step 3: Clone and parse ───────────────────────────────────
+        # â”€â”€ Step 3: Clone and parse â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         clone_url = f"https://github.com/{repo.owner}/{repo.name}.git"
+
+        def record_commit_progress(processed: int, total: int | None) -> None:
+            _update_ingestion(
+                repo,
+                stage="commits",
+                processed=processed,
+                total=total,
+                detail="Parsing commit history.",
+            )
+
         clone_result = clone_and_parse(
-            clone_url, repo_id=repo.id, existing_hashes=existing_hashes
+            clone_url,
+            repo_id=repo.id,
+            existing_hashes=existing_hashes,
+            on_commit_progress=record_commit_progress,
         )
         clone_path = clone_result.clone_path
 
-        # ── Step 4: Persist new commits (non-destructive) ─────────────
+        # â”€â”€ Step 4: Persist new commits (non-destructive) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        _update_ingestion(repo, stage="commits", processed=0, total=len(clone_result.commits), detail="Persisting new commits and file changes.")
         _persist_new_commits(repo, clone_result.commits, existing_hashes)
+        _update_ingestion(repo, processed=len(clone_result.commits), total=len(clone_result.commits), detail="Commit history persisted.")
 
         repo.commit_cap_reached = clone_result.cap_reached
         repo.save(update_fields=["commit_cap_reached"])
 
-        # ── Step 5: Fetch and upsert PRs + reviews ────────────────────
+        # â”€â”€ Step 5: Fetch and upsert PRs + reviews â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        _update_ingestion(repo, stage="reviews", detail="Collecting available pull requests and reviews.")
         try:
             prs = fetch_pull_requests(repo.owner, repo.name)
         except RuntimeError as gh_err:
@@ -123,15 +165,20 @@ def ingest_repository(self, repo_id: int) -> dict:
             prs = []
 
         _upsert_pull_requests(repo, prs)
+        _update_ingestion(repo, processed=len(prs), total=len(prs), detail="Pull request and review data updated.")
 
-        # ── Step 6: Recalculate analysis (atomic ownership refresh) ───
+        # â”€â”€ Step 6: Recalculate analysis (atomic ownership refresh) â”€â”€â”€
+        _update_ingestion(repo, stage="ownership", processed=0, total=CommitFile.objects.filter(commit__repository=repo).count(), detail="Calculating ownership and bus-factor risk.")
         _run_analysis(repo)
+        _update_ingestion(repo, detail="Ownership analysis complete.")
 
-        # ── Step 7: Mark complete ─────────────────────────────────────
+        # â”€â”€ Step 7: Mark complete â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         repo.status = Repository.Status.COMPLETE
         repo.last_ingested_at = timezone.now()
         repo.error_message = None
-        repo.save(update_fields=["status", "last_ingested_at", "error_message"])
+        repo.ingestion_stage = "complete"
+        repo.save(update_fields=["status", "ingestion_stage", "last_ingested_at", "error_message"])
+        _update_ingestion(repo, stage="complete", detail="Core repository intelligence is ready.")
         
         # Trigger incremental parsing asynchronously
         parse_repository_code.delay(repo_id)
@@ -142,7 +189,8 @@ def ingest_repository(self, repo_id: int) -> dict:
         logger.exception("Ingestion failed for repo %s", repo_id)
         repo.status = Repository.Status.FAILED
         repo.error_message = str(exc)[:2000]
-        repo.save(update_fields=["status", "error_message"])
+        repo.ingestion_stage = "failed"
+        repo.save(update_fields=["status", "ingestion_stage", "error_message"])
         try:
             raise self.retry(exc=exc)
         except self.MaxRetriesExceededError:
@@ -289,7 +337,7 @@ def _upsert_pull_requests(repo: Repository, prs: list) -> None:
                 )
 
             # Reviews WITHOUT github_review_id: safe replace for this PR
-            # (bounded scope — only touches reviews for this specific PR
+            # (bounded scope â€” only touches reviews for this specific PR
             #  that lack a review ID)
             if reviews_without_id:
                 PRReview.objects.filter(
@@ -340,7 +388,7 @@ def _run_analysis(repo: Repository) -> None:
         .select_related("commit")
         .values("file_path", "insertions", "deletions", "commit__author_name")
     )
-    ownership = compute_file_ownership(list(file_rows))
+    ownership = compute_file_ownership(file_rows)
 
     # Atomic swap: delete old + create new inside one transaction.
     # If anything fails, the old rows are preserved by the rollback.
@@ -362,7 +410,7 @@ def _run_analysis(repo: Repository) -> None:
             batch_size=500,
         )
 
-    # Review graph is computed on read from PRReview rows — no separate table.
+    # Review graph is computed on read from PRReview rows â€” no separate table.
     # Touch the function so the pipeline exercises it and validates data shape.
     review_qs = PRReview.objects.filter(
         pull_request__repository=repo
@@ -575,10 +623,10 @@ def process_pending_embeddings():
     
     # We must lock the rows so parallel tasks don't embed the same chunks twice
     pending_chunks = list(
-        CodeChunk.objects.filter(
+        CodeChunk.objects.select_for_update(skip_locked=True).filter(
             embedding_status=CodeChunk.EmbeddingStatus.PENDING,
             embedding_model=current_model
-        ).select_for_update(skip_locked=True)[:batch_size]
+        )[:batch_size]
     )
     
     if not pending_chunks:

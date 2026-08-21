@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  getOwnership, getReviews, getStatus, getSummary,
-  type FileOwnership, type ReviewGraph, type Summary,
+  getActivity, getDirectoryOwnership, getOwnership, getReviews, getRiskReportPdfUrl, getRiskReportUrl, getStatus, getSummary,
+  type ActivityResponse, type DirectoryOwnership, type FileOwnership, type ReviewGraph, type Summary,
 } from "../api/client";
 import { AppShell } from "../components/shell/AppShell";
 import { CommandPalette } from "../components/CommandPalette";
 import { BusFactorPanel } from "../components/BusFactorPanel";
+import { ActivityCalendar } from "../components/ActivityCalendar";
+import { DirectoryOwnershipPanel } from "../components/DirectoryOwnershipPanel";
 import { LoadingState } from "../components/ui/LoadingState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { MetricCard } from "../components/ui/MetricCard";
@@ -21,6 +23,11 @@ export function IntelligencePage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [ownership, setOwnership] = useState<FileOwnership[]>([]);
   const [reviews, setReviews] = useState<ReviewGraph | null>(null);
+  const [activity, setActivity] = useState<ActivityResponse | null>(null);
+  const [directories, setDirectories] = useState<DirectoryOwnership[]>([]);
+  const [activityDays, setActivityDays] = useState(365);
+  const [activityContributor, setActivityContributor] = useState<string | undefined>();
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "success" | "error">("idle");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,10 +46,10 @@ export function IntelligencePage() {
     setLoading(true);
     (async () => {
       try {
-        const [sum, own, rev] = await Promise.all([
-          getSummary(repoId), getOwnership(repoId), getReviews(repoId),
+        const [sum, own, rev, activityData, directoryData] = await Promise.all([
+          getSummary(repoId), getOwnership(repoId), getReviews(repoId), getActivity(repoId, activityDays, activityContributor), getDirectoryOwnership(repoId),
         ]);
-        if (!cancelled) { setSummary(sum); setOwnership(own); setReviews(rev); }
+        if (!cancelled) { setSummary(sum); setOwnership(own); setReviews(rev); setActivity(activityData); setDirectories(directoryData.results); }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed");
       } finally {
@@ -50,7 +57,7 @@ export function IntelligencePage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [ready, repoId]);
+  }, [ready, repoId, activityDays, activityContributor]);
 
   const bottlenecks = reviews?.nodes.filter((n) => n.is_bottleneck) ?? [];
 
@@ -69,6 +76,13 @@ export function IntelligencePage() {
             <p style={{ margin: 0, color: "var(--color-muted)", fontSize: "13px" }}>
               Ownership concentration, knowledge risk, and review patterns.
             </p>
+            {ready && (
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "12px" }}>
+                <a href={getRiskReportUrl(repoId)} download style={reportButtonStyle}>Download JSON report</a>
+                <button onClick={() => downloadPdf(getRiskReportPdfUrl(repoId), repoId, setDownloadState)} disabled={downloadState === "downloading"} style={reportButtonStyle}>{downloadState === "downloading" ? "Preparing PDF…" : downloadState === "success" ? "PDF downloaded" : "Download PDF report"}</button>
+                {downloadState === "error" && <span style={{ color: "var(--color-red)", fontSize: "12px" }}>PDF download failed. Try again.</span>}
+              </div>
+            )}
           </div>
 
           {/* Risk metrics */}
@@ -78,7 +92,7 @@ export function IntelligencePage() {
                 label="At-Risk Files"
                 value={summary.at_risk_file_count}
                 accent={summary.at_risk_file_count > 0 ? "red" : "default"}
-                sub="≥80% single-owner churn"
+                sub="Ã¢â€°Â¥80% single-owner churn"
               />
               <MetricCard
                 label="Bottleneck Reviewers"
@@ -90,7 +104,7 @@ export function IntelligencePage() {
             </div>
           )}
 
-          {loading && <LoadingState message="Loading intelligence data…" />}
+          {loading && <LoadingState message="Loading intelligence dataÃ¢â‚¬Â¦" />}
           {error && <ErrorState message={error} />}
 
           {!loading && !error && (
@@ -111,6 +125,8 @@ export function IntelligencePage() {
                 </div>
               )}
 
+              {activity && <ActivityCalendar data={activity} onWindowChange={setActivityDays} onContributorChange={setActivityContributor} />}
+              {directories.length > 0 && <DirectoryOwnershipPanel rows={directories} />}
               {/* File ownership */}
               {ownership.length > 0 && (
                 <section>
@@ -154,3 +170,6 @@ export function IntelligencePage() {
     </>
   );
 }
+
+const reportButtonStyle = { padding: "7px 10px", border: "1px solid var(--color-border)", borderRadius: "7px", color: "var(--color-text)", background: "var(--color-surface-2)", fontSize: "12px", textDecoration: "none", cursor: "pointer" } as const;
+async function downloadPdf(url: string, repoId: number, setState: (state: "idle" | "downloading" | "success" | "error") => void) { try { setState("downloading"); const response = await fetch(url); if (!response.ok) throw new Error("download failed"); const anchor = document.createElement("a"); anchor.href = URL.createObjectURL(await response.blob()); anchor.download = `gitpulse-risk-report-${repoId}.pdf`; anchor.click(); URL.revokeObjectURL(anchor.href); setState("success"); } catch { setState("error"); } }

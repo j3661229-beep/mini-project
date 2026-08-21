@@ -77,7 +77,7 @@ export function CollaborationPage() {
             </div>
           )}
 
-          {loading && <LoadingState message="Loading collaboration data…" />}
+          {loading && <LoadingState message="Loading collaboration dataâ€¦" />}
           {error && <ErrorState message={error} />}
 
           {!loading && !error && (
@@ -85,7 +85,7 @@ export function CollaborationPage() {
               {/* Reviewer Network */}
               {reviews && (
                 <section>
-                  <SectionHeader title="Reviewer Network" desc="Directed reviewer → author edges. Node size = review reliance (in-degree)." />
+                  <SectionHeader title="Reviewer Network" desc="Directed reviewer â†’ author edges. Node size = review reliance (in-degree)." />
                   <ReviewBottleneckGraph graph={reviews} />
                 </section>
               )}
@@ -93,7 +93,7 @@ export function CollaborationPage() {
               {/* Bus Factor */}
               {ownership.length > 0 && (
                 <section>
-                  <SectionHeader title="File Ownership" desc="Files where one contributor owns ≥80% of churn — single-owner risk." />
+                  <SectionHeader title="File Ownership" desc="Files where one contributor owns â‰¥80% of churn â€” single-owner risk." />
                   <BusFactorPanel ownership={ownership} />
                 </section>
               )}
@@ -101,8 +101,8 @@ export function CollaborationPage() {
               {/* Heatmap */}
               {heatmap && heatmap.files.length > 0 && (
                 <section>
-                  <SectionHeader title="Contributor Heatmap" desc="File × author churn matrix for the top 50 most active files." />
-                  <HeatmapPanel data={heatmap} />
+                  <SectionHeader title="Contributor Heatmap" desc="File Ã— author churn matrix for the top 50 most active files." />
+                  <HeatmapPanel data={heatmap} ownership={ownership} />
                 </section>
               )}
             </div>

@@ -29,6 +29,7 @@ class RepositorySerializer(serializers.ModelSerializer):
             "name",
             "status",
             "error_message",
+            "ingestion_stage",
             "last_ingested_at",
             "commit_cap_reached",
             "created_at",
@@ -39,7 +40,7 @@ class RepositorySerializer(serializers.ModelSerializer):
 class RepositoryStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = Repository
-        fields = ["id", "status", "error_message", "commit_cap_reached"]
+        fields = ["id", "status", "ingestion_stage", "ingestion_progress", "ingestion_stage_started_at", "ingestion_heartbeat_at", "error_message", "commit_cap_reached"]
         read_only_fields = fields
 
 

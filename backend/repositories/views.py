@@ -1,6 +1,7 @@
 x`  from collections import defaultdict
 
 from django.conf import settings
+from django.http import HttpResponse
 from django.db import models as db_models
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -24,6 +25,8 @@ from repositories.models import (
 )
 from pgvector.django import CosineDistance
 from repositories.services.embeddings import generate_embeddings
+from repositories.services.insights import activity_summary, directory_ownership
+from repositories.services.pdf_report import build_risk_report_pdf
 from repositories.serializers import (
     CommitSerializer,
     FileOwnershipSerializer,
@@ -94,18 +97,15 @@ class RepositoryViewSet(
             },
         )
 
-        # Re-enqueue if previously failed or if explicitly re-requested
-        if created or repo.status in (
-            Repository.Status.FAILED,
-            Repository.Status.COMPLETE,
-            Repository.Status.PENDING,
-        ):
-            if not created and repo.status != Repository.Status.PROCESSING:
+        # Preserve completed analysis on duplicate submissions. Only work that
+        # has not finished successfully is enqueued again.
+        if created or repo.status in (Repository.Status.FAILED, Repository.Status.PENDING):
+            if not created:
                 repo.status = Repository.Status.PENDING
+                repo.ingestion_stage = "queued"
                 repo.error_message = None
-                repo.save(update_fields=["status", "error_message"])
-            if repo.status != Repository.Status.PROCESSING:
-                enqueue_ingestion(repo.id)
+                repo.save(update_fields=["status", "ingestion_stage", "error_message"])
+            enqueue_ingestion(repo.id)
 
         return Response(
             RepositorySerializer(repo).data,
@@ -202,6 +202,83 @@ class RepositoryViewSet(
         }
         return Response(SummarySerializer(payload).data)
 
+    @action(detail=True, methods=["get"], url_path="risk-report")
+    def risk_report(self, request, pk=None):
+        """Export the existing repository intelligence data as a JSON report."""
+        repo = self.get_object()
+        ownership = FileOwnership.objects.filter(repository=repo).order_by(
+            "-bus_factor_risk", "-top_contributor_share", "-total_churn"
+        )
+        review_rows = list(
+            PRReview.objects.filter(pull_request__repository=repo)
+            .select_related("pull_request")
+            .values_list("reviewer_login", "pull_request__author_login")
+        )
+        graph = compute_review_graph(
+            [{"reviewer_login": reviewer, "author_login": author} for reviewer, author in review_rows]
+        )
+        payload = {
+            "repository": {
+                "id": repo.id,
+                "owner": repo.owner,
+                "name": repo.name,
+                "github_url": repo.github_url,
+                "analysis_status": repo.status,
+                "last_ingested_at": repo.last_ingested_at,
+                "commit_cap_reached": repo.commit_cap_reached,
+            },
+            "summary": {
+                "commit_count": repo.commits.count(),
+                "contributor_count": repo.commits.order_by("author_email").values("author_email").distinct().count(),
+                "pull_request_count": repo.pull_requests.count(),
+                "at_risk_file_count": ownership.filter(bus_factor_risk=True).count(),
+                "bottleneck_count": sum(1 for node in graph.nodes if node.is_bottleneck),
+            },
+            "file_ownership": FileOwnershipSerializer(ownership, many=True).data,
+            "activity": activity_summary(repo),
+            "directory_ownership": directory_ownership(repo),
+            "review_bottlenecks": [
+                {
+                    "login": node.login,
+                    "in_degree": node.in_degree,
+                    "out_degree": node.out_degree,
+                    "is_bottleneck": node.is_bottleneck,
+                }
+                for node in graph.nodes
+            ],
+        }
+        response = Response(payload)
+        response["Content-Disposition"] = f'attachment; filename="gitpulse-risk-report-{repo.id}.json"'
+        return response
+
+    @action(detail=True, methods=["get"], url_path="risk-report/pdf")
+    def risk_report_pdf(self, request, pk=None):
+        payload = self.risk_report(request, pk=pk).data
+        pdf = build_risk_report_pdf(payload)
+        response = HttpResponse(pdf, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="gitpulse-risk-report-{pk}.pdf"'
+        return response
+
+
+
+    @action(detail=True, methods=["get"], url_path="activity")
+    def activity(self, request, pk=None):
+        repo = self.get_object()
+        try:
+            days = int(request.query_params.get("days", 365))
+        except ValueError:
+            return Response({"detail": "days must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        contributor = request.query_params.get("contributor", "").strip() or None
+        return Response(activity_summary(repo, days=days, contributor=contributor))
+
+    @action(detail=True, methods=["get"], url_path="directory-ownership")
+    def directory_ownership_view(self, request, pk=None):
+        repo = self.get_object()
+        try:
+            depth = int(request.query_params.get("depth", 1))
+        except ValueError:
+            return Response({"detail": "depth must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"depth": max(1, min(depth, 8)), "results": directory_ownership(repo, depth=depth)})
     @action(detail=True, methods=["get"], url_path="files")
     def files(self, request, pk=None):
         repo = self.get_object()

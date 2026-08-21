@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import logging
 import shutil
+import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 from django.conf import settings
 from git import Repo
@@ -61,6 +64,7 @@ def clone_and_parse(
     repo_id: int,
     commit_cap: int | None = None,
     existing_hashes: set[str] | None = None,
+    on_commit_progress: Callable[[int, int | None], None] | None = None,
 ) -> CloneResult:
     """
     Shallow-clone a repo into a temp dir and parse commit history.
@@ -73,10 +77,11 @@ def clone_and_parse(
     cap = commit_cap if commit_cap is not None else settings.INGESTION_COMMIT_CAP
     base = Path(settings.CLONE_BASE_DIR)
     base.mkdir(parents=True, exist_ok=True)
-    clone_path = base / f"repo_{repo_id}"
 
-    if clone_path.exists():
-        shutil.rmtree(clone_path, ignore_errors=True)
+    # mkdtemp atomically reserves an empty directory for this operation. It
+    # never reuses a repository-id-based path, so concurrent requests and
+    # stale directories cannot collide with a new clone.
+    clone_path = Path(tempfile.mkdtemp(prefix="clone-", dir=base))
 
     try:
         # Depth large enough for the cap; still avoids full history for huge repos.
@@ -86,26 +91,51 @@ def clone_and_parse(
             str(clone_path),
             multi_options=[f"--depth={depth}", "--no-single-branch"],
         )
+        commits, cap_reached = _parse_commits(repo, cap, existing_hashes or set(), on_commit_progress)
     except GitCommandError as exc:
+        cleanup_clone(clone_path)
         raise RuntimeError(f"Failed to clone repository: {exc}") from exc
+    except Exception:
+        # The caller only receives clone_path after success, so this function
+        # owns cleanup for failures during cloning or parsing.
+        cleanup_clone(clone_path)
+        raise
 
-    commits, cap_reached = _parse_commits(repo, cap, existing_hashes or set())
     return CloneResult(commits=commits, cap_reached=cap_reached, clone_path=clone_path)
 
 
 def cleanup_clone(clone_path: Path | None) -> None:
-    if clone_path and clone_path.exists():
-        shutil.rmtree(clone_path, ignore_errors=True)
+    """Remove a clone directory owned by this ingestion operation.
 
+    A short retry handles transient Windows/OneDrive file locks without ever
+    touching paths allocated by another clone operation.
+    """
+    if not clone_path:
+        return
+
+    for attempt in range(3):
+        try:
+            shutil.rmtree(clone_path)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError as exc:
+            if attempt == 2:
+                logger.warning("Could not remove temporary clone %s: %s", clone_path, exc)
+                return
+            time.sleep(0.1 * (attempt + 1))
 
 def _parse_commits(
     repo: Repo, cap: int, existing_hashes: set[str] | None = None,
+    on_progress: Callable[[int, int | None], None] | None = None,
 ) -> tuple[list[ParsedCommit], bool]:
     """Parse commits from a cloned repo, skipping file stats for known hashes."""
     known = existing_hashes or set()
     branch_map = _build_branch_map(repo)
     parsed: list[ParsedCommit] = []
     cap_reached = False
+    if on_progress:
+        on_progress(0, None)
 
     try:
         iterator = repo.iter_commits(all=True, max_count=cap + 1)
@@ -141,6 +171,8 @@ def _parse_commits(
 
     # Chronological order for storage / timeline rendering
     parsed.sort(key=lambda c: c.committed_at)
+    if on_progress:
+        on_progress(len(parsed), len(parsed))
     return parsed, cap_reached
 
 

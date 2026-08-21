@@ -1,12 +1,12 @@
-# GitPulse ⚡
+# GitPulse âš¡
 
-> **Interactive Visualization Suite for GitHub Repositories** — Commit DAG evolution, file ownership/bus-factor risk assessment, and PR review bottleneck network graphs.
+> **Interactive Visualization Suite for GitHub Repositories** â€” Commit DAG evolution, file ownership/bus-factor risk assessment, and PR review bottleneck network graphs.
 
 ---
 
-## 📌 Executive Summary & What We Have Done So Far
+## ðŸ“Œ Executive Summary & What We Have Done So Far
 
-Existing repository analytics tools (like Gource, GitHub Insights, or git-truck) visualize commit history in isolation. **GitPulse** bridges commit history and team dynamics by pairing a time-scrubbable commit DAG with an interactive directed reviewer↔author graph to surface **where team knowledge is fragile** and **where pull request reviews bottleneck development**.
+Existing repository analytics tools (like Gource, GitHub Insights, or git-truck) visualize commit history in isolation. **GitPulse** bridges commit history and team dynamics by pairing a time-scrubbable commit DAG with an interactive directed reviewerâ†”author graph to surface **where team knowledge is fragile** and **where pull request reviews bottleneck development**.
 
 ### Summary of Completed Milestones
 
@@ -59,86 +59,86 @@ Existing repository analytics tools (like Gource, GitHub Insights, or git-truck)
 
 ---
 
-## 🏗 System Architecture & Workflow
+## ðŸ— System Architecture & Workflow
 
 ```
-       ┌─────────────────────────────────────────┐
-       │             React + Vite SPA            │
-       │       (D3.js + Tailwind + TS)           │
-       └────────────────────┬────────────────────┘
-                            │ REST API (JSON)
-                            ▼
-       ┌─────────────────────────────────────────┐
-       │         Django REST Framework           │
-       │  POST /api/repositories/ (Trigger)     │
-       │  GET  /api/repositories/{id}/status/    │
-       │  GET  /api/repositories/{id}/[views]    │
-       └────────────────────┬────────────────────┘
-                            │ Task Enqueue
-                            ▼
-       ┌─────────────────────────────────────────┐
-       │              Celery Worker              │
-       │ ├── GitPython  → Shallow clone & parse  │
-       │ ├── PyGithub   → PRs & review metadata  │
-       │ └── Analysis   → DAG, Bus Factor, Graph │
-       └────────────────────┬────────────────────┘
-                            │ Precomputed Data Write
-                            ▼
-       ┌─────────────────────────────────────────┐
-       │               PostgreSQL                │
-       │    (Commits, PRs, Ownership, Graph)     │
-       └─────────────────────────────────────────┘
+       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+       â”‚             React + Vite SPA            â”‚
+       â”‚       (D3.js + Tailwind + TS)           â”‚
+       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                            â”‚ REST API (JSON)
+                            â–¼
+       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+       â”‚         Django REST Framework           â”‚
+       â”‚  POST /api/repositories/ (Trigger)     â”‚
+       â”‚  GET  /api/repositories/{id}/status/    â”‚
+       â”‚  GET  /api/repositories/{id}/[views]    â”‚
+       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                            â”‚ Task Enqueue
+                            â–¼
+       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+       â”‚              Celery Worker              â”‚
+       â”‚ â”œâ”€â”€ GitPython  â†’ Shallow clone & parse  â”‚
+       â”‚ â”œâ”€â”€ PyGithub   â†’ PRs & review metadata  â”‚
+       â”‚ â””â”€â”€ Analysis   â†’ DAG, Bus Factor, Graph â”‚
+       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                            â”‚ Precomputed Data Write
+                            â–¼
+       â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+       â”‚               PostgreSQL                â”‚
+       â”‚    (Commits, PRs, Ownership, Graph)     â”‚
+       â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ---
 
-## 📂 Project Repository Layout
+## ðŸ“‚ Project Repository Layout
 
 ```
 mini/
-├── backend/
-│   ├── analysis/               # Core Analysis Engine
-│   │   ├── engines/
-│   │   │   ├── bus_factor.py   # Churn calculation & single-owner risk scoring
-│   │   │   ├── dag.py          # Commit DAG generation & topological ordering
-│   │   │   └── review_graph.py # NetworkX directed PR review graph builder
-│   │   └── tests/              # Engine unit test fixtures & tests
-│   ├── config/                 # Django settings, WSGI, ASGI, Celery app config
-│   ├── repositories/           # Repositories App (Models, Views, Serializers, Tasks)
-│   │   ├── models.py           # DB Schemas: Repository, Commit, PR, Ownership, Review
-│   │   ├── tasks.py            # Celery async ingestion & analysis workflow
-│   │   ├── views.py            # API endpoint viewsets
-│   │   └── serializers.py      # DRF serializers
-│   ├── manage.py
-│   ├── pytest.ini
-│   ├── Procfile
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── api/                # Axios/Fetch API client bindings
-│   │   ├── components/         # Visualizations & UI Components
-│   │   │   ├── BranchTimeline.tsx
-│   │   │   ├── BusFactorPanel.tsx
-│   │   │   ├── CommitGraph.tsx
-│   │   │   ├── DashboardSummary.tsx
-│   │   │   ├── IngestionStatus.tsx
-│   │   │   ├── RepoInput.tsx
-│   │   │   └── ReviewBottleneckGraph.tsx
-│   │   ├── hooks/              # Custom React hooks (useRepositoryData, useIngestionStatus)
-│   │   ├── pages/              # Main view dashboard pages
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── package.json
-│   └── vite.config.ts
-├── docker-compose.yml          # Postgres + Redis container stack
-├── render.yaml                 # Deployment blueprint for Render
-├── .env.example                # Sample environment variables
-└── README.md                   # Comprehensive project documentation & roadmap
+â”œâ”€â”€ backend/
+â”‚   â”œâ”€â”€ analysis/               # Core Analysis Engine
+â”‚   â”‚   â”œâ”€â”€ engines/
+â”‚   â”‚   â”‚   â”œâ”€â”€ bus_factor.py   # Churn calculation & single-owner risk scoring
+â”‚   â”‚   â”‚   â”œâ”€â”€ dag.py          # Commit DAG generation & topological ordering
+â”‚   â”‚   â”‚   â””â”€â”€ review_graph.py # NetworkX directed PR review graph builder
+â”‚   â”‚   â””â”€â”€ tests/              # Engine unit test fixtures & tests
+â”‚   â”œâ”€â”€ config/                 # Django settings, WSGI, ASGI, Celery app config
+â”‚   â”œâ”€â”€ repositories/           # Repositories App (Models, Views, Serializers, Tasks)
+â”‚   â”‚   â”œâ”€â”€ models.py           # DB Schemas: Repository, Commit, PR, Ownership, Review
+â”‚   â”‚   â”œâ”€â”€ tasks.py            # Celery async ingestion & analysis workflow
+â”‚   â”‚   â”œâ”€â”€ views.py            # API endpoint viewsets
+â”‚   â”‚   â””â”€â”€ serializers.py      # DRF serializers
+â”‚   â”œâ”€â”€ manage.py
+â”‚   â”œâ”€â”€ pytest.ini
+â”‚   â”œâ”€â”€ Procfile
+â”‚   â””â”€â”€ requirements.txt
+â”œâ”€â”€ frontend/
+â”‚   â”œâ”€â”€ src/
+â”‚   â”‚   â”œâ”€â”€ api/                # Axios/Fetch API client bindings
+â”‚   â”‚   â”œâ”€â”€ components/         # Visualizations & UI Components
+â”‚   â”‚   â”‚   â”œâ”€â”€ BranchTimeline.tsx
+â”‚   â”‚   â”‚   â”œâ”€â”€ BusFactorPanel.tsx
+â”‚   â”‚   â”‚   â”œâ”€â”€ CommitGraph.tsx
+â”‚   â”‚   â”‚   â”œâ”€â”€ DashboardSummary.tsx
+â”‚   â”‚   â”‚   â”œâ”€â”€ IngestionStatus.tsx
+â”‚   â”‚   â”‚   â”œâ”€â”€ RepoInput.tsx
+â”‚   â”‚   â”‚   â””â”€â”€ ReviewBottleneckGraph.tsx
+â”‚   â”‚   â”œâ”€â”€ hooks/              # Custom React hooks (useRepositoryData, useIngestionStatus)
+â”‚   â”‚   â”œâ”€â”€ pages/              # Main view dashboard pages
+â”‚   â”‚   â”œâ”€â”€ App.tsx
+â”‚   â”‚   â””â”€â”€ main.tsx
+â”‚   â”œâ”€â”€ package.json
+â”‚   â””â”€â”€ vite.config.ts
+â”œâ”€â”€ docker-compose.yml          # Postgres + Redis container stack
+â”œâ”€â”€ render.yaml                 # Deployment blueprint for Render
+â”œâ”€â”€ .env.example                # Sample environment variables
+â””â”€â”€ README.md                   # Comprehensive project documentation & roadmap
 ```
 
 ---
 
-## 📡 API Reference
+## ðŸ“¡ API Reference
 
 | HTTP Method | Path | Description |
 |---|---|---|
@@ -151,7 +151,7 @@ mini/
 
 ---
 
-## 🚀 Quick Start (Local Setup)
+## ðŸš€ Quick Start (Local Setup)
 
 ### Prerequisites
 - **Python**: 3.11+
@@ -213,44 +213,44 @@ All analysis engines and URL validator tests will execute using fixture data wit
 
 ---
 
-## 🗺 Project Roadmap
+## ðŸ—º Project Roadmap
 
 Based on the completed foundation, here is the upcoming development roadmap for GitPulse:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    GitPulse Roadmap (v1 to v3)                  │
-└─────────────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    GitPulse Roadmap (v1 to v3)                  â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 
-  [✅ COMPLETED]  Phase 1: Core Engine & Visualizations (v1.0)
-  ├── Shallow repository cloning & commit tree extraction
-  ├── PyGithub integration for PR review metadata
-  ├── Bus factor & ownership concentration scoring engine
-  ├── Directed NetworkX reviewer-author bottleneck engine
-  ├── Interactive D3.js Commit DAG, Bus Factor Panel, and Review Graph
-  └── Docker Compose & Render deployment blueprints
+  [âœ… COMPLETED]  Phase 1: Core Engine & Visualizations (v1.0)
+  â”œâ”€â”€ Shallow repository cloning & commit tree extraction
+  â”œâ”€â”€ PyGithub integration for PR review metadata
+  â”œâ”€â”€ Bus factor & ownership concentration scoring engine
+  â”œâ”€â”€ Directed NetworkX reviewer-author bottleneck engine
+  â”œâ”€â”€ Interactive D3.js Commit DAG, Bus Factor Panel, and Review Graph
+  â””â”€â”€ Docker Compose & Render deployment blueprints
 
-  [⏳ UPCOMING]   Phase 2: Advanced Visualizations & Insights (v1.1)
-  ├── File Churn vs. Ownership Heatmap Matrix
-  ├── Contributor Activity Calendar & Timeline Scruber
-  ├── Subdirectory-level Bus Factor Rollup summaries
-  └── Exportable Risk Reports (PDF / JSON summary download)
+  [â³ UPCOMING]   Phase 2: Advanced Visualizations & Insights (v1.1)
+  â”œâ”€â”€ File Churn vs. Ownership Heatmap Matrix
+  â”œâ”€â”€ Contributor Activity Calendar & Timeline Scruber
+  â”œâ”€â”€ Subdirectory-level Bus Factor Rollup summaries
+  â””â”€â”€ Exportable Risk Reports (PDF / JSON summary download)
 
-  [🔮 PLANNED]    Phase 3: Auth & Private Repositories (v2.0)
-  ├── GitHub OAuth 2.0 Integration
-  ├── Private Repository Access & Ingestion
-  ├── Team / Organization Workspaces & Permission Scopes
-  └── Persistent Database Caching per Organization
+  [ðŸ”® PLANNED]    Phase 3: Auth & Private Repositories (v2.0)
+  â”œâ”€â”€ GitHub OAuth 2.0 Integration
+  â”œâ”€â”€ Private Repository Access & Ingestion
+  â”œâ”€â”€ Team / Organization Workspaces & Permission Scopes
+  â””â”€â”€ Persistent Database Caching per Organization
 
-  [🚀 FUTURE]     Phase 4: Real-Time Alerts & Integration (v3.0)
-  ├── Slack & Microsoft Teams Webhook Alerts on High Risk Commits
-  ├── GitHub Action integration for PR Bus-Factor Impact Checks
-  └── Multi-Repository Cross-Project Dependency & Bottleneck Graph
+  [ðŸš€ FUTURE]     Phase 4: Real-Time Alerts & Integration (v3.0)
+  â”œâ”€â”€ Slack & Microsoft Teams Webhook Alerts on High Risk Commits
+  â”œâ”€â”€ GitHub Action integration for PR Bus-Factor Impact Checks
+  â””â”€â”€ Multi-Repository Cross-Project Dependency & Bottleneck Graph
 ```
 
 ---
 
-## 🔒 Security & Best Practices
+## ðŸ”’ Security & Best Practices
 
 - **Token Safety**: GitHub API tokens are kept server-side inside Celery execution context and are never exposed to the client bundle.
 - **Input Sanitization**: Repository URLs are validated against standard GitHub pattern schemas before invocation by GitPython to prevent injection.
@@ -258,6 +258,36 @@ Based on the completed foundation, here is the upcoming development roadmap for 
 
 ---
 
-## 📄 License
+## ðŸ“„ License
 
 Distributed under the MIT License. See `LICENSE` for details.
+
+---
+
+## Current intelligence capabilities
+
+GitPulse now provides the following verified repository-intelligence capabilities:
+
+- Real ingestion-stage polling for cloning, commit parsing, reviews, ownership analysis, completion, and failure.
+- Collision-safe temporary clone workspaces for simultaneous and repeated repository analyses.
+- Contributor activity intelligence using recorded commit history, with 30/90/365-day windows and contributor filtering.
+- Directory ownership rollups computed from recorded commit-file churn, including dominant contributor, ownership share, contributor count, bus-factor estimate, churn, affected files, and the existing high-concentration risk threshold.
+- JSON and PDF risk reports generated from the same stored repository, ownership, review, activity, and directory data.
+
+### Additional API endpoints
+
+| HTTP Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/repositories/{id}/activity/?days=30|90|365&contributor=` | Bounded daily commit activity and contributor summaries. |
+| `GET` | `/api/repositories/{id}/directory-ownership/?depth=1` | Directory-level churn, ownership, bus-factor, and risk rollups. |
+| `GET` | `/api/repositories/{id}/risk-report/` | Download the JSON repository risk report. |
+| `GET` | `/api/repositories/{id}/risk-report/pdf/` | Download the paginated PDF repository risk report. |
+### Large-repository processing status
+
+Repository status polling now includes worker-persisted progress rather than simulated frontend progress:
+
+- `ingestion_stage`: current core ingestion stage.
+- `ingestion_progress`: optional `processed`, `total`, and worker-provided `detail` fields.
+- `ingestion_stage_started_at` and `ingestion_heartbeat_at`: timestamps used by the UI to distinguish active work from a slow update.
+
+Commit parsing records real completed commit counts in batches of ten. Totals are shown only after Git has discovered them. The pipeline remains incremental: previously stored commit hashes skip repeat file-stat extraction. Semantic chunk generation now fetches existing chunk hashes once for the repository instead of issuing one existence query per candidate chunk.

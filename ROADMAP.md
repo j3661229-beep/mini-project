@@ -31,3 +31,28 @@ With the fundamental AI-readiness layer achieved, the architecture is ready to a
 - **Automated PR Reviews**: Injecting context-aware code diff embeddings directly into generative LLMs to critique or approve Pull Requests autonomously.
 - **Advanced Graph Connections**: Linking `CodeImport` and dependencies across the vector store to resolve broader codebase structural changes and detect security risks.
 - **Cross-Repository Searching**: Expanding the semantic layer to easily find overlapping code patterns, duplication, and usage implementations globally across the GitPulse ecosystem.
+
+## Delivery status
+
+### Completed
+
+- ✓ Incremental, non-destructive Git ingestion and isolated temporary clone workspaces with regression coverage for concurrency and cleanup.
+- ✓ Source persistence, AST extraction, semantic chunking, embeddings, and repository-scoped semantic search.
+- ✓ Contributor activity calendar data with bounded date windows and contributor filtering.
+- ✓ Directory-level ownership and bus-factor rollups from recorded commit-file churn.
+- ✓ JSON and paginated PDF repository risk reports using only stored analysis data.
+
+### In progress
+
+- UI refinement and performance tuning for large repository datasets, including persisted ingestion counters, worker heartbeats, and status-poll backoff.
+
+### Next
+
+- Directory drill-down navigation and server-side pagination for very large directory hierarchies.
+- Activity comparisons across selected contributors and configurable calendar periods.
+
+### Future
+
+- GitHub OAuth and private repository ingestion.
+- Team workspaces, organization cache, alerts, GitHub Action checks, and multi-repository intelligence.
+- RAG repository questions and automated PR review workflows.
