@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Search, LayoutDashboard, GitGraph, Eye, Code2, Users, Sparkles, X } from "lucide-react";
+import { Search, LayoutDashboard, GitGraph, Eye, Code2, Users, Sparkles, X, Bot, GitPullRequest } from "lucide-react";
+
 
 interface CommandItem {
   id: string;
@@ -29,8 +30,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     ...(id
       ? [
           { id: "overview", label: "Overview", description: "Dashboard", icon: <LayoutDashboard size={14} />, action: () => nav(`/repo/${id}`) },
+          { id: "chat", label: "AI Assistant", description: "Chat with codebase (RAG)", icon: <Bot size={14} />, action: () => nav(`/repo/${id}/chat`) },
           { id: "commits", label: "Commits", description: "Commit history & DAG", icon: <GitGraph size={14} />, action: () => nav(`/repo/${id}/commits`) },
+          { id: "prs", label: "Pull Requests", description: "Pull requests & automated AI diff reviews", icon: <GitPullRequest size={14} />, action: () => nav(`/repo/${id}/prs`) },
           { id: "collaboration", label: "Collaboration", description: "Reviews & contributor graph", icon: <Eye size={14} />, action: () => nav(`/repo/${id}/collaboration`) },
+
           { id: "code", label: "Code Explorer", description: "Browse source files", icon: <Code2 size={14} />, action: () => nav(`/repo/${id}/code`) },
           { id: "search", label: "Semantic Search", description: "AI-powered code search", icon: <Sparkles size={14} />, action: () => nav(`/repo/${id}/search`) },
           { id: "intelligence", label: "Intelligence", description: "Ownership & risk analysis", icon: <Users size={14} />, action: () => nav(`/repo/${id}/intelligence`) },

@@ -19,7 +19,7 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 SECRET_KEY = env("SECRET_KEY", default="django-insecure-dev-only-change-me")
 DEBUG = env("DEBUG")
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "testserver", "*"])
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -133,8 +133,14 @@ MAX_SOURCE_FILE_SIZE = env.int("MAX_SOURCE_FILE_SIZE", default=1024 * 1024)  # 1
 MAX_PR_PATCH_SIZE = env.int("MAX_PR_PATCH_SIZE", default=512 * 1024)         # 500 KB
 CLONE_BASE_DIR = env("CLONE_BASE_DIR", default=str(BASE_DIR / "tmp_clones"))
 
-# Embeddings
+# Embeddings & Generative RAG
+GEMINI_API_KEY = env("GEMINI_API_KEY", default=env("GOOGLE_API_KEY", default=""))
+LLM_PROVIDER = env("LLM_PROVIDER", default="gemini")
+LLM_MODEL = env("LLM_MODEL", default="gemini-2.5-flash")
+
 OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
 EMBEDDING_PROVIDER = env("EMBEDDING_PROVIDER", default="openai")
 EMBEDDING_MODEL = env("EMBEDDING_MODEL", default="text-embedding-3-small")
 EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=1536)
+
+

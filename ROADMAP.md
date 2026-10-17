@@ -25,9 +25,14 @@ GitPulse is a comprehensive system designed to parse, ingest, and semantically a
 - **OpenAI Batch Embedding**: Connected OpenAI's `text-embedding-3-small` dynamically using Celery queuing logic to compute embeddings reliably via `process_pending_embeddings` row locking.
 - **Semantic Retrieval**: Added `/api/repositories/{id}/semantic-search/?q=...` API that vectorizes the inbound query and fetches conceptually related symbols or file paths.
 
+### Step 5: Generative RAG over Repositories (Completed)
+- **Context-Grounded Question Answering**: Implemented conversational retrieval-augmented generation (RAG) over repository codebases (`/api/repositories/{id}/chat/`).
+- **Hybrid Retrieval**: Combines pgvector cosine similarity search over code chunks with AST symbol and file keyword ranking.
+- **Structural Grounding**: Injects high-level repository intelligence (commit history, top contributors, high bus-factor risk files) directly into prompt context.
+- **Multi-Turn Chat Assistant**: Interactive AI assistant UI with grounded source citations, file line ranges, relevance percentages, code previews, and quick prompt suggestions.
+
 ## Future Roadmap (Next Steps)
-With the fundamental AI-readiness layer achieved, the architecture is ready to adopt direct LLM interfaces. Future features may include:
-- **Retrieval Augmented Generation (RAG)**: Leveraging the `semantic-search` endpoints to answer arbitrary questions over arbitrary repositories using an AI agent.
+With the fundamental AI and Generative RAG layers achieved:
 - **Automated PR Reviews**: Injecting context-aware code diff embeddings directly into generative LLMs to critique or approve Pull Requests autonomously.
 - **Advanced Graph Connections**: Linking `CodeImport` and dependencies across the vector store to resolve broader codebase structural changes and detect security risks.
 - **Cross-Repository Searching**: Expanding the semantic layer to easily find overlapping code patterns, duplication, and usage implementations globally across the GitPulse ecosystem.
@@ -38,6 +43,7 @@ With the fundamental AI-readiness layer achieved, the architecture is ready to a
 
 - ✓ Incremental, non-destructive Git ingestion and isolated temporary clone workspaces with regression coverage for concurrency and cleanup.
 - ✓ Source persistence, AST extraction, semantic chunking, embeddings, and repository-scoped semantic search.
+- ✓ Generative RAG assistant over repositories with grounded code citations and multi-turn chat.
 - ✓ Contributor activity calendar data with bounded date windows and contributor filtering.
 - ✓ Directory-level ownership and bus-factor rollups from recorded commit-file churn.
 - ✓ JSON and paginated PDF repository risk reports using only stored analysis data.
@@ -55,4 +61,4 @@ With the fundamental AI-readiness layer achieved, the architecture is ready to a
 
 - GitHub OAuth and private repository ingestion.
 - Team workspaces, organization cache, alerts, GitHub Action checks, and multi-repository intelligence.
-- RAG repository questions and automated PR review workflows.
+- Automated PR review workflows.

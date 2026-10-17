@@ -273,6 +273,7 @@ GitPulse now provides the following verified repository-intelligence capabilitie
 - Contributor activity intelligence using recorded commit history, with 30/90/365-day windows and contributor filtering.
 - Directory ownership rollups computed from recorded commit-file churn, including dominant contributor, ownership share, contributor count, bus-factor estimate, churn, affected files, and the existing high-concentration risk threshold.
 - JSON and PDF risk reports generated from the same stored repository, ownership, review, activity, and directory data.
+- **Generative RAG AI Assistant**: Conversational retrieval-augmented generation grounded in Tree-sitter parsed AST symbols, semantic code chunks, and repository structural metrics.
 
 ### Additional API endpoints
 
@@ -282,6 +283,9 @@ GitPulse now provides the following verified repository-intelligence capabilitie
 | `GET` | `/api/repositories/{id}/directory-ownership/?depth=1` | Directory-level churn, ownership, bus-factor, and risk rollups. |
 | `GET` | `/api/repositories/{id}/risk-report/` | Download the JSON repository risk report. |
 | `GET` | `/api/repositories/{id}/risk-report/pdf/` | Download the paginated PDF repository risk report. |
+| `GET` | `/api/repositories/{id}/chat/` | Diagnostic status of RAG indexing and configured LLM models. |
+| `POST` | `/api/repositories/{id}/chat/` | Ask questions over repository codebase with grounded code citations. |
+
 ### Large-repository processing status
 
 Repository status polling now includes worker-persisted progress rather than simulated frontend progress:

@@ -13,7 +13,8 @@ import { ActivityCalendar } from "../components/ActivityCalendar";
 import { HeatmapPanel } from "../components/HeatmapPanel";
 import { usePolling } from "../hooks/usePolling";
 import { useCommandPalette } from "../hooks/useCommandPalette";
-import { FileWarning, Users, Eye, ShieldAlert, ArrowRight, Code2 } from "lucide-react";
+import { FileWarning, Users, Eye, ShieldAlert, ArrowRight, Code2, Bot, GitPullRequest } from "lucide-react";
+
 
 interface DashboardProps { section?: string; }
 
@@ -111,10 +112,13 @@ function IngestionProgress({ status, stage, progress, heartbeatAt }: { status: s
 }
 function QuickNav({ repoId, summary }: { repoId: number; summary: Summary }) {
   const sections = [
+    { to: "/repo/" + repoId + "/prs", icon: <GitPullRequest size={18} />, label: "Pull Requests", desc: String(summary.pr_count) + " recorded PR" + (summary.pr_count !== 1 ? "s" : ""), accent: "var(--color-purple)" },
+    { to: "/repo/" + repoId + "/chat", icon: <Bot size={18} />, label: "AI Assistant", desc: "Chat with codebase (RAG)", accent: "var(--color-red)" },
     { to: "/repo/" + repoId + "/collaboration", icon: <Users size={18} />, label: "Collaboration", desc: String(summary.bottleneck_count) + " bottleneck" + (summary.bottleneck_count !== 1 ? "s" : ""), accent: "var(--color-blue)" },
     { to: "/repo/" + repoId + "/code", icon: <Code2 size={18} />, label: "Code Explorer", desc: "Browse source files", accent: "var(--color-green)" },
     { to: "/repo/" + repoId + "/search", icon: <Eye size={18} />, label: "Semantic Search", desc: "Search code by meaning", accent: "var(--color-purple)" },
     { to: "/repo/" + repoId + "/intelligence", icon: <ShieldAlert size={18} />, label: "Intelligence", desc: String(summary.at_risk_file_count) + " at-risk file" + (summary.at_risk_file_count !== 1 ? "s" : ""), accent: summary.at_risk_file_count > 0 ? "var(--color-red)" : "var(--color-yellow)" },
   ];
+
   return <section><h2 className="dashboard-explore-title">Explore</h2><div className="dashboard-explore-grid">{sections.map((item) => <Link className="dashboard-explore-link" key={item.to} to={item.to} style={{ "--section-accent": item.accent } as React.CSSProperties}><span>{item.icon}</span><div><strong>{item.label}</strong><small>{item.desc}</small></div><ArrowRight size={14} /></Link>)}</div></section>;
 }

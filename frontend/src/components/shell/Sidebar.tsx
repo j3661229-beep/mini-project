@@ -52,8 +52,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             { label: "Commits", to: `/repo/${id}/commits`, icon: <GitGraph size={15} /> },
             { label: "Branches", to: `/repo/${id}/branches`, icon: <GitBranch size={15} /> },
             { label: "Files", to: `/repo/${id}/code`, icon: <Files size={15} /> },
-            { label: "Pull Requests", to: `/repo/${id}/prs`, icon: <GitPullRequest size={15} />, soon: true },
+            { label: "Pull Requests", to: `/repo/${id}/prs`, icon: <GitPullRequest size={15} /> },
             { label: "Reviews", to: `/repo/${id}/collaboration`, icon: <Eye size={15} /> },
+
           ],
         },
         {
@@ -67,11 +68,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         {
           title: "Intelligence",
           items: [
+            { label: "AI Assistant", to: `/repo/${id}/chat`, icon: <Bot size={15} /> },
             { label: "Ownership", to: `/repo/${id}/intelligence`, icon: <Users size={15} /> },
-            { label: "Risk", to: `/repo/${id}/intelligence`, icon: <ShieldAlert size={15} /> },
+            { label: "Risk Analysis", to: `/repo/${id}/intelligence`, icon: <ShieldAlert size={15} /> },
             { label: "Security", to: `/repo/${id}/intelligence`, icon: <Lock size={15} />, soon: true },
             { label: "Risk Prediction", to: `/repo/${id}/intelligence`, icon: <TrendingUp size={15} />, soon: true },
-            { label: "AI Assistant", to: `/repo/${id}/intelligence`, icon: <Bot size={15} />, soon: true },
           ],
         },
       ]

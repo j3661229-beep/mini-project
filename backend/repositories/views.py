@@ -1,4 +1,4 @@
-x`  from collections import defaultdict
+from collections import defaultdict
 
 from django.conf import settings
 from django.http import HttpResponse
@@ -15,6 +15,7 @@ from repositories.models import (
     CommitFile,
     FileOwnership,
     PRReview,
+    PullRequest,
     PullRequestFile,
     Repository,
     SourceFile,
@@ -23,15 +24,22 @@ from repositories.models import (
     CodeImport,
     CodeChunk,
 )
+import logging
+import re
 from pgvector.django import CosineDistance
 from repositories.services.embeddings import generate_embeddings
 from repositories.services.insights import activity_summary, directory_ownership
 from repositories.services.pdf_report import build_risk_report_pdf
+from repositories.services.pr_review import generate_ai_pr_review
+from repositories.services.rag import generate_rag_answer, get_rag_status, retrieve_context
 from repositories.serializers import (
     CommitSerializer,
     FileOwnershipSerializer,
+    PRReviewSerializer,
+    PullRequestDetailSerializer,
     PullRequestFileDetailSerializer,
     PullRequestFileSerializer,
+    PullRequestSummarySerializer,
     RepositoryCreateSerializer,
     RepositorySerializer,
     RepositoryStatusSerializer,
@@ -40,7 +48,10 @@ from repositories.serializers import (
     SourceFileSerializer,
     SummarySerializer,
     CodeSymbolSerializer,
+
     CodeImportSerializer,
+    ChatQuerySerializer,
+    ChatResponseSerializer,
 )
 from repositories.tasks import ingest_repository
 
@@ -312,8 +323,74 @@ class RepositoryViewSet(
         serializer = SourceFileSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
+    @action(detail=True, methods=["get"], url_path="pull-requests")
+    def pull_requests(self, request, pk=None):
+        repo = self.get_object()
+        qs = PullRequest.objects.filter(repository=repo).order_by("-pr_number")
+
+        state = request.query_params.get("state", "").lower()
+        if state in ("open", "closed", "merged"):
+            qs = qs.filter(state=state)
+
+        search = request.query_params.get("search", "").strip()
+        if search:
+            if search.startswith("#"):
+                search = search[1:]
+            if search.isdigit():
+                qs = qs.filter(pr_number=int(search))
+            else:
+                qs = qs.filter(author_login__icontains=search)
+
+        from django.db.models import Count, Sum
+        qs = qs.annotate(
+            files_count=Count("files", distinct=True),
+            total_additions=Sum("files__additions"),
+            total_deletions=Sum("files__deletions"),
+            review_count=Count("reviews", distinct=True),
+        )
+
+        paginator = CursorPagination()
+        paginator.ordering = "-pr_number"
+        page = paginator.paginate_queryset(qs, request, view=self)
+        serializer = PullRequestSummarySerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path=r"pull-requests/(?P<pr_number>\d+)")
+    def pr_detail(self, request, pk=None, pr_number=None):
+        repo = self.get_object()
+        pr = PullRequest.objects.filter(repository=repo, pr_number=pr_number).first()
+        if not pr:
+            return Response(
+                {"error": f"Pull Request #{pr_number} not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = PullRequestDetailSerializer(pr)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=["post"], url_path=r"pull-requests/(?P<pr_number>\d+)/review")
+    def pr_ai_review(self, request, pk=None, pr_number=None):
+        repo = self.get_object()
+        pr = PullRequest.objects.filter(repository=repo, pr_number=pr_number).first()
+        if not pr:
+            return Response(
+                {"error": f"Pull Request #{pr_number} not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        try:
+            review_data = generate_ai_pr_review(pr)
+            return Response(review_data)
+        except Exception as exc:
+            logging.getLogger(__name__).exception("Error generating PR review: %s", exc)
+            return Response(
+                {"error": f"Failed to generate review: {str(exc)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @action(detail=True, methods=["get"], url_path=r"pull-requests/(?P<pr_number>\d+)/files")
     def pr_files(self, request, pk=None, pr_number=None):
+
         repo = self.get_object()
         qs = PullRequestFile.objects.filter(pull_request__repository=repo, pull_request__pr_number=pr_number).order_by("id")
         
@@ -414,55 +491,104 @@ class RepositoryViewSet(
         repo = self.get_object()
         query = request.query_params.get("q", "").strip()
         top_k = int(request.query_params.get("top_k", 10))
-        
+
         if not query:
             return Response({"error": "Query parameter 'q' is required"}, status=status.HTTP_400_BAD_REQUEST)
-            
-        # 1. Embed the query
+
+        results: list[dict] = []
+
+        # 1. Attempt vector search (pgvector CosineDistance on Postgres / mocked in tests)
         try:
-            query_vector = generate_embeddings([query])[0]
-        except Exception as e:
-            return Response({"error": "Failed to generate query embedding"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-            
-        # 2. Search CodeChunks scoped to repository
-        # Use pgvector CosineDistance
-        try:
-            chunks = (
-                CodeChunk.objects.filter(
-                    source_content__files__repository=repo,
-                    embedding_status=CodeChunk.EmbeddingStatus.EMBEDDED
+            query_vectors = generate_embeddings([query])
+            if query_vectors and len(query_vectors[0]) > 0:
+                query_vector = query_vectors[0]
+                chunks = (
+                    CodeChunk.objects.filter(
+                        source_content__files__repository=repo,
+                        embedding_status=CodeChunk.EmbeddingStatus.EMBEDDED
+                    )
+                    .annotate(similarity=1 - CosineDistance("embedding", query_vector))
+                    .order_by(CosineDistance("embedding", query_vector))
+                    [:top_k]
                 )
-                .annotate(similarity=1 - CosineDistance("embedding", query_vector))
-                .order_by(CosineDistance("embedding", query_vector))
-                [:top_k]
-            )
-            
-            results = []
-            for chunk in chunks:
-                # Resolve file path
-                source_file = SourceFile.objects.filter(
-                    repository=repo, 
-                    source_content=chunk.source_content
-                ).first()
-                file_path = source_file.file_path if source_file else None
-                
-                results.append({
-                    "id": chunk.id,
-                    "file_path": file_path,
-                    "symbol_name": chunk.symbol_name,
-                    "chunk_type": chunk.chunk_type,
-                    "start_line": chunk.start_line,
-                    "end_line": chunk.end_line,
-                    "similarity": chunk.similarity,
-                    "chunk_text_snippet": chunk.chunk_text[:500] + ("..." if len(chunk.chunk_text) > 500 else "")
-                })
-                
-            return Response({"results": results})
+
+                for chunk in chunks:
+                    source_file = SourceFile.objects.filter(
+                        repository=repo,
+                        source_content=chunk.source_content
+                    ).first()
+                    file_path = source_file.file_path if source_file else None
+
+                    results.append({
+                        "id": chunk.id,
+                        "file_path": file_path,
+                        "symbol_name": chunk.symbol_name or "",
+                        "chunk_type": chunk.chunk_type,
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                        "similarity": round(float(getattr(chunk, "similarity", 0.0) or 0.0), 3),
+                        "chunk_text_snippet": (chunk.chunk_text[:500] + "...") if len(chunk.chunk_text) > 500 else chunk.chunk_text,
+                    })
+
+                if results:
+                    return Response({"results": results[:top_k]})
         except Exception as e:
-            # Fallback if DB doesn't support vector ops (e.g. SQLite local dev)
-            import logging
-            logging.error(f"Semantic search DB error: {e}")
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logging.getLogger(__name__).debug("pgvector search not available (%s); falling back to hybrid retrieval", e)
+
+        # 2. SQLite / Non-Vector Hybrid Fallback
+        if not results:
+            try:
+                sources, _ = retrieve_context(repo, query, top_k=top_k)
+                for src in sources:
+                    results.append({
+                        "id": src["id"],
+                        "file_path": src["file_path"],
+                        "symbol_name": src["symbol_name"],
+                        "chunk_type": src["chunk_type"],
+                        "start_line": src["start_line"],
+                        "end_line": src["end_line"],
+                        "similarity": src["similarity"],
+                        "chunk_text_snippet": (src["chunk_text"][:500] + "...") if len(src["chunk_text"]) > 500 else src["chunk_text"],
+                    })
+            except Exception as e:
+                logging.getLogger(__name__).warning("Hybrid context retrieval error: %s", e)
+
+
+        # 3. CodeSymbol & SourceFile fallback if repository chunks are sparse
+        if not results:
+            terms = [w.lower() for w in re.findall(r"\w+", query) if len(w) >= 3] or [query.lower()]
+            candidate_symbols = (
+                CodeSymbol.objects.filter(
+                    parsing__source_content__files__repository=repo
+                )
+                .select_related("parsing__source_content")[:50]
+            )
+
+            for sym in candidate_symbols:
+                name_lower = sym.name.lower()
+                matches = sum(1 for t in terms if t in name_lower)
+                if matches > 0:
+                    source_file = SourceFile.objects.filter(
+                        repository=repo, source_content=sym.parsing.source_content
+                    ).first()
+                    sc_content = sym.parsing.source_content.content or ""
+                    snippet_lines = sc_content.splitlines()[max(0, sym.start_line - 1) : sym.end_line]
+                    snippet = "\n".join(snippet_lines) or sym.name
+                    results.append({
+                        "id": sym.id,
+                        "file_path": source_file.file_path if source_file else "unknown",
+                        "symbol_name": sym.name,
+                        "chunk_type": sym.symbol_type or "symbol",
+                        "start_line": sym.start_line,
+                        "end_line": sym.end_line,
+                        "similarity": round(matches / max(len(terms), 1), 2),
+                        "chunk_text_snippet": (snippet[:500] + "...") if len(snippet) > 500 else snippet,
+                    })
+                    if len(results) >= top_k:
+                        break
+
+        return Response({"results": results[:top_k]})
+
 
     @action(detail=True, methods=["get"], url_path="heatmap")
     def heatmap(self, request, pk=None):
@@ -536,3 +662,35 @@ class RepositoryViewSet(
                 "cells": cells,
             }
         )
+
+    @action(detail=True, methods=["get", "post"], url_path="chat")
+    def chat(self, request, pk=None):
+        """
+        Generative RAG chat endpoint over repository codebase.
+        GET: Returns RAG indexing readiness, model config, and diagnostics.
+        POST: Accepts question and optional history, retrieves grounded code context,
+              and generates conversational architectural answer via LLM.
+        """
+        repo = self.get_object()
+
+        if request.method == "GET":
+            status_data = get_rag_status(repo)
+            return Response(status_data)
+
+        serializer = ChatQuerySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        query = serializer.validated_data["query"]
+        history = serializer.validated_data.get("history", [])
+        top_k = serializer.validated_data.get("top_k", 6)
+
+        result = generate_rag_answer(
+            repository=repo,
+            query=query,
+            history=history,
+            top_k=top_k,
+        )
+
+        response_serializer = ChatResponseSerializer(result)
+        return Response(response_serializer.data, status=status.HTTP_200_OK)
+

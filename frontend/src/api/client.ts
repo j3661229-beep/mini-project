@@ -271,3 +271,166 @@ export interface DirectoryOwnershipResponse { depth: number; results: DirectoryO
 export function getActivity(id: number, days = 365, contributor?: string) { const query = new URLSearchParams({ days: String(days) }); if (contributor) query.set("contributor", contributor); return request<ActivityResponse>(`/repositories/${id}/activity/?${query}`); }
 export function getDirectoryOwnership(id: number, depth = 1) { return request<DirectoryOwnershipResponse>(`/repositories/${id}/directory-ownership/?depth=${depth}`); }
 export function getRiskReportPdfUrl(id: number) { return `${API_BASE}/repositories/${id}/risk-report/pdf/`; }
+
+// ── Generative RAG & AI Assistant ────────────────────────────────
+export interface RAGSource {
+  id: number;
+  file_path: string;
+  symbol_name: string;
+  chunk_type: string;
+  start_line: number;
+  end_line: number;
+  similarity: number;
+  snippet: string;
+}
+
+export interface RAGMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface RAGResponse {
+  answer: string;
+  sources: RAGSource[];
+  repository: {
+    id: number;
+    owner: string;
+    name: string;
+    github_url?: string;
+  };
+  model: string;
+}
+
+export interface RAGStatus {
+  available: boolean;
+  has_api_key: boolean;
+  llm_model: string;
+  embedding_model: string;
+  total_chunks: number;
+  embedded_chunks: number;
+  total_symbols: number;
+}
+
+export function askRepoChat(
+  id: number,
+  message: string,
+  history: RAGMessage[] = [],
+  topK = 6
+): Promise<RAGResponse> {
+  return request<RAGResponse>(`/repositories/${id}/chat/`, {
+    method: "POST",
+    body: JSON.stringify({ message, history, top_k: topK }),
+  });
+}
+
+export function getChatStatus(id: number): Promise<RAGStatus> {
+  return request<RAGStatus>(`/repositories/${id}/chat/`);
+}
+
+// ── Pull Request Intelligence & AI Review ────────────────────────
+export interface PRReview {
+  id: number;
+  reviewer_login: string;
+  review_state: string;
+  github_review_id?: number | null;
+}
+
+export interface PRFile {
+  id: number;
+  file_path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  is_truncated: boolean;
+  patch?: string;
+}
+
+export interface PRRiskAssessment {
+  file_path: string;
+  top_contributor: string;
+  top_contributor_share: number;
+  bus_factor_risk: boolean;
+  warning: string;
+}
+
+export interface PullRequestSummary {
+  id: number;
+  pr_number: number;
+  author_login: string;
+  state: "open" | "closed" | "merged" | string;
+  created_at: string;
+  merged_at: string | null;
+  files_count: number;
+  total_additions: number;
+  total_deletions: number;
+  review_count: number;
+  latest_review_state: string;
+}
+
+export interface PullRequestsResponse {
+  next: string | null;
+  previous: string | null;
+  results: PullRequestSummary[];
+}
+
+export interface PullRequestDetail {
+  id: number;
+  pr_number: number;
+  author_login: string;
+  state: "open" | "closed" | "merged" | string;
+  created_at: string;
+  merged_at: string | null;
+  files: PRFile[];
+  reviews: PRReview[];
+  total_files: number;
+  total_additions: number;
+  total_deletions: number;
+  risk_assessment: PRRiskAssessment[];
+}
+
+export interface AIPRReviewResponse {
+  pr_number: number;
+  verdict: "APPROVE" | "COMMENT" | "REQUEST_CHANGES";
+  review: string;
+  model: string;
+  files_analyzed: number;
+  total_additions: number;
+  total_deletions: number;
+  ownership_risks: Array<{
+    file_path: string;
+    top_contributor: string;
+    top_contributor_share: number;
+    bus_factor_risk: boolean;
+  }>;
+}
+
+export function getPullRequests(
+  repoId: number,
+  params?: { state?: string; search?: string }
+): Promise<PullRequestsResponse> {
+  const query = new URLSearchParams();
+  if (params?.state && params.state !== "all") query.set("state", params.state);
+  if (params?.search) query.set("search", params.search);
+  const qStr = query.toString();
+  return request<PullRequestsResponse>(
+    `/repositories/${repoId}/pull-requests/${qStr ? `?${qStr}` : ""}`
+  );
+}
+
+export function getPullRequestDetail(
+  repoId: number,
+  prNumber: number
+): Promise<PullRequestDetail> {
+  return request<PullRequestDetail>(`/repositories/${repoId}/pull-requests/${prNumber}/`);
+}
+
+export function generateAIPRReview(
+  repoId: number,
+  prNumber: number
+): Promise<AIPRReviewResponse> {
+  return request<AIPRReviewResponse>(
+    `/repositories/${repoId}/pull-requests/${prNumber}/review/`,
+    { method: "POST", body: JSON.stringify({}) }
+  );
+}
+

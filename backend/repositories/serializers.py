@@ -1,8 +1,8 @@
 from rest_framework import serializers
 
 from repositories.models import (
-    Commit, FileOwnership, Repository, SourceFile, PullRequestFile,
-    CodeParsing, CodeSymbol, CodeImport
+    Commit, FileOwnership, Repository, SourceFile, PullRequest, PullRequestFile,
+    PRReview, CodeParsing, CodeSymbol, CodeImport
 )
 from repositories.services.url_validation import InvalidRepoURL, parse_github_url
 
@@ -182,3 +182,128 @@ class PullRequestFileSerializer(serializers.ModelSerializer):
 class PullRequestFileDetailSerializer(PullRequestFileSerializer):
     class Meta(PullRequestFileSerializer.Meta):
         fields = PullRequestFileSerializer.Meta.fields + ["patch"]
+
+
+class PRReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PRReview
+        fields = [
+            "id",
+            "reviewer_login",
+            "review_state",
+            "github_review_id",
+        ]
+
+
+class PullRequestSummarySerializer(serializers.ModelSerializer):
+    files_count = serializers.IntegerField(read_only=True, default=0)
+    total_additions = serializers.IntegerField(read_only=True, default=0)
+    total_deletions = serializers.IntegerField(read_only=True, default=0)
+    review_count = serializers.IntegerField(read_only=True, default=0)
+    latest_review_state = serializers.CharField(read_only=True, default="")
+
+    class Meta:
+        model = PullRequest
+        fields = [
+            "id",
+            "pr_number",
+            "author_login",
+            "state",
+            "created_at",
+            "merged_at",
+            "files_count",
+            "total_additions",
+            "total_deletions",
+            "review_count",
+            "latest_review_state",
+        ]
+
+
+class PullRequestDetailSerializer(serializers.ModelSerializer):
+    files = PullRequestFileDetailSerializer(many=True, read_only=True)
+    reviews = PRReviewSerializer(many=True, read_only=True)
+    total_files = serializers.SerializerMethodField()
+    total_additions = serializers.SerializerMethodField()
+    total_deletions = serializers.SerializerMethodField()
+    risk_assessment = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PullRequest
+        fields = [
+            "id",
+            "pr_number",
+            "author_login",
+            "state",
+            "created_at",
+            "merged_at",
+            "files",
+            "reviews",
+            "total_files",
+            "total_additions",
+            "total_deletions",
+            "risk_assessment",
+        ]
+
+    def get_total_files(self, obj) -> int:
+        return obj.files.count()
+
+    def get_total_additions(self, obj) -> int:
+        return sum(f.additions for f in obj.files.all())
+
+    def get_total_deletions(self, obj) -> int:
+        return sum(f.deletions for f in obj.files.all())
+
+    def get_risk_assessment(self, obj) -> list[dict]:
+        risks = []
+        for f in obj.files.all():
+            ownership = FileOwnership.objects.filter(
+                repository=obj.repository, file_path=f.file_path
+            ).first()
+            if ownership and ownership.bus_factor_risk:
+                risks.append({
+                    "file_path": f.file_path,
+                    "top_contributor": ownership.top_contributor,
+                    "top_contributor_share": ownership.top_contributor_share,
+                    "bus_factor_risk": True,
+                    "warning": f"File '{f.file_path}' has {int(ownership.top_contributor_share * 100)}% ownership by {ownership.top_contributor}.",
+                })
+        return risks
+
+
+
+class ChatMessageSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=["user", "assistant"])
+    content = serializers.CharField()
+
+
+class ChatQuerySerializer(serializers.Serializer):
+    query = serializers.CharField(required=False, default="")
+    message = serializers.CharField(required=False, default="")
+    history = ChatMessageSerializer(many=True, required=False, default=list)
+    top_k = serializers.IntegerField(required=False, default=6, min_value=1, max_value=20)
+
+    def validate(self, attrs):
+        query = attrs.get("query") or attrs.get("message")
+        if not query or not query.strip():
+            raise serializers.ValidationError("Either 'query' or 'message' is required.")
+        attrs["query"] = query.strip()
+        return attrs
+
+
+class RAGSourceSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    file_path = serializers.CharField()
+    symbol_name = serializers.CharField(allow_blank=True)
+    chunk_type = serializers.CharField()
+    start_line = serializers.IntegerField()
+    end_line = serializers.IntegerField()
+    similarity = serializers.FloatField()
+    snippet = serializers.CharField()
+
+
+class ChatResponseSerializer(serializers.Serializer):
+    answer = serializers.CharField()
+    sources = RAGSourceSerializer(many=True)
+    repository = serializers.DictField()
+    model = serializers.CharField()
+

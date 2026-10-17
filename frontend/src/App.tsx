@@ -6,6 +6,9 @@ import { CodeExplorerPage } from "./pages/CodeExplorerPage";
 import { SemanticSearchPage } from "./pages/SemanticSearchPage";
 import { IntelligencePage } from "./pages/IntelligencePage";
 import { CommitsPage } from "./pages/CommitsPage";
+import { ChatPage } from "./pages/ChatPage";
+import { PullRequestsPage } from "./pages/PullRequestsPage";
+import { PullRequestDetailPage } from "./pages/PullRequestDetailPage";
 
 export default function App() {
   return (
@@ -16,10 +19,14 @@ export default function App() {
         <Route path="/repo/:id" element={<Dashboard />} />
         <Route path="/repo/:id/commits" element={<CommitsPage />} />
         <Route path="/repo/:id/branches" element={<Dashboard section="branches" />} />
+        <Route path="/repo/:id/prs" element={<PullRequestsPage />} />
+        <Route path="/repo/:id/prs/:prNumber" element={<PullRequestDetailPage />} />
         <Route path="/repo/:id/collaboration" element={<CollaborationPage />} />
         <Route path="/repo/:id/code" element={<CodeExplorerPage />} />
         <Route path="/repo/:id/search" element={<SemanticSearchPage />} />
+        <Route path="/repo/:id/chat" element={<ChatPage />} />
         <Route path="/repo/:id/intelligence" element={<IntelligencePage />} />
+
         {/* Legacy: redirect old /dashboard/:id to /repo/:id */}
         <Route path="/dashboard/:id" element={<LegacyRedirect />} />
         <Route path="*" element={<Navigate to="/" replace />} />
