@@ -74,3 +74,62 @@ def test_directory_ownership_respects_requested_depth(repo):
 
     assert response.status_code == 200
     assert response.data["results"][0]["directory"] == "src/api"
+
+
+@pytest.mark.django_db
+def test_directory_tree_hierarchy_builds_nested_tree(repo):
+    now = datetime.now(timezone.utc)
+    add_commit(repo, "1", "alice", now, "src/api/views.py", 20, 5)
+    add_commit(repo, "2", "alice", now, "src/api/models.py", 10, 2)
+    add_commit(repo, "3", "bob", now, "docs/readme.md", 15, 0)
+    add_commit(repo, "4", "carol", now, "package.json", 4, 1)
+
+    response = APIClient().get(f"/api/repositories/{repo.id}/directory-tree/")
+
+    assert response.status_code == 200
+    data = response.data
+    tree = data["tree"]
+    summary = data["summary"]
+
+    assert summary["total_files"] == 4
+    assert tree["type"] == "directory"
+    assert tree["total_churn"] == (25 + 12 + 15 + 5)
+    assert len(tree["children"]) >= 3  # src, docs, package.json
+
+    # Check that src directory rolled up
+    src_dir = next(c for c in tree["children"] if c["name"] == "src")
+    assert src_dir["type"] == "directory"
+    assert src_dir["total_churn"] == 37
+    assert src_dir["top_contributor"] == "alice"
+    assert src_dir["bus_factor_risk"] is True
+
+    # Check root file package.json
+    pkg_file = next(c for c in tree["children"] if c["name"] == "package.json")
+    assert pkg_file["type"] == "file"
+    assert pkg_file["total_churn"] == 5
+    assert pkg_file["top_contributor"] == "carol"
+
+
+@pytest.mark.django_db
+def test_directory_tree_drill_down_path_and_breadcrumbs(repo):
+    now = datetime.now(timezone.utc)
+    add_commit(repo, "1", "alice", now, "src/api/views.py", 10, 2)
+    add_commit(repo, "2", "alice", now, "src/api/models.py", 8, 1)
+
+    response = APIClient().get(f"/api/repositories/{repo.id}/directory-tree/?path=src/api")
+
+    assert response.status_code == 200
+    data = response.data
+    tree = data["tree"]
+    breadcrumbs = data["breadcrumbs"]
+
+    assert len(breadcrumbs) == 3
+    assert breadcrumbs[0]["path"] == ""
+    assert breadcrumbs[1]["path"] == "src"
+    assert breadcrumbs[2]["path"] == "src/api"
+
+    assert tree["name"] == "api"
+    assert tree["path"] == "src/api"
+    assert len(tree["children"]) == 2
+    names = {c["name"] for c in tree["children"]}
+    assert names == {"views.py", "models.py"}
