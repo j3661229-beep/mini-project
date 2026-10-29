@@ -28,7 +28,7 @@ import logging
 import re
 from pgvector.django import CosineDistance
 from repositories.services.embeddings import generate_embeddings
-from repositories.services.insights import activity_summary, directory_ownership
+from repositories.services.insights import activity_summary, directory_ownership, directory_tree_hierarchy
 from repositories.services.pdf_report import build_risk_report_pdf
 from repositories.services.pr_review import generate_ai_pr_review
 from repositories.services.rag import generate_rag_answer, get_rag_status, retrieve_context
@@ -290,6 +290,20 @@ class RepositoryViewSet(
         except ValueError:
             return Response({"detail": "depth must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"depth": max(1, min(depth, 8)), "results": directory_ownership(repo, depth=depth)})
+
+    @action(detail=True, methods=["get"], url_path="directory-tree")
+    def directory_tree_view(self, request, pk=None):
+        repo = self.get_object()
+        path = request.query_params.get("path", "").strip()
+        try:
+            depth = int(request.query_params.get("depth", 10))
+        except ValueError:
+            depth = 10
+        try:
+            min_churn = int(request.query_params.get("min_churn", 0))
+        except ValueError:
+            min_churn = 0
+        return Response(directory_tree_hierarchy(repo, root_path=path, max_depth=depth, min_churn=min_churn))
     @action(detail=True, methods=["get"], url_path="files")
     def files(self, request, pk=None):
         repo = self.get_object()
