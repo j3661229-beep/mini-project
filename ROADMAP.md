@@ -46,6 +46,7 @@ With the fundamental AI and Generative RAG layers achieved:
 - ✓ Generative RAG assistant over repositories with grounded code citations and multi-turn chat.
 - ✓ Contributor activity calendar data with bounded date windows and contributor filtering.
 - ✓ Directory-level ownership and bus-factor rollups from recorded commit-file churn.
+- ✓ Interactive zoomable Treemap & directory hierarchy drill-down navigation with bus-factor risk heat mapping and path breadcrumbs.
 - ✓ JSON and paginated PDF repository risk reports using only stored analysis data.
 
 ### In progress
@@ -54,7 +55,6 @@ With the fundamental AI and Generative RAG layers achieved:
 
 ### Next
 
-- Directory drill-down navigation and server-side pagination for very large directory hierarchies.
 - Activity comparisons across selected contributors and configurable calendar periods.
 
 ### Future
