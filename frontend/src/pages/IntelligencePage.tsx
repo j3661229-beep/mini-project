@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
-  getActivity, getDirectoryOwnership, getOwnership, getReviews, getRiskReportPdfUrl, getRiskReportUrl, getStatus, getSummary,
-  type ActivityResponse, type DirectoryOwnership, type FileOwnership, type ReviewGraph, type Summary,
+  getActivity, getDirectoryOwnership, getDirectoryTree, getOwnership, getReviews, getRiskReportPdfUrl, getRiskReportUrl, getStatus, getSummary,
+  type ActivityResponse, type DirectoryOwnership, type DirectoryTreeResponse, type FileOwnership, type ReviewGraph, type Summary,
 } from "../api/client";
 import { AppShell } from "../components/shell/AppShell";
 import { CommandPalette } from "../components/CommandPalette";
 import { BusFactorPanel } from "../components/BusFactorPanel";
 import { ActivityCalendar } from "../components/ActivityCalendar";
 import { DirectoryOwnershipPanel } from "../components/DirectoryOwnershipPanel";
+import { CodebaseTreemap } from "../components/CodebaseTreemap";
 import { LoadingState } from "../components/ui/LoadingState";
 import { ErrorState } from "../components/ui/ErrorState";
 import { MetricCard } from "../components/ui/MetricCard";
@@ -25,6 +26,8 @@ export function IntelligencePage() {
   const [reviews, setReviews] = useState<ReviewGraph | null>(null);
   const [activity, setActivity] = useState<ActivityResponse | null>(null);
   const [directories, setDirectories] = useState<DirectoryOwnership[]>([]);
+  const [directoryTree, setDirectoryTree] = useState<DirectoryTreeResponse | null>(null);
+  const [treeLoading, setTreeLoading] = useState(false);
   const [activityDays, setActivityDays] = useState(365);
   const [activityContributor, setActivityContributor] = useState<string | undefined>();
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "success" | "error">("idle");
@@ -46,10 +49,10 @@ export function IntelligencePage() {
     setLoading(true);
     (async () => {
       try {
-        const [sum, own, rev, activityData, directoryData] = await Promise.all([
-          getSummary(repoId), getOwnership(repoId), getReviews(repoId), getActivity(repoId, activityDays, activityContributor), getDirectoryOwnership(repoId),
+        const [sum, own, rev, activityData, directoryData, treeData] = await Promise.all([
+          getSummary(repoId), getOwnership(repoId), getReviews(repoId), getActivity(repoId, activityDays, activityContributor), getDirectoryOwnership(repoId), getDirectoryTree(repoId),
         ]);
-        if (!cancelled) { setSummary(sum); setOwnership(own); setReviews(rev); setActivity(activityData); setDirectories(directoryData.results); }
+        if (!cancelled) { setSummary(sum); setOwnership(own); setReviews(rev); setActivity(activityData); setDirectories(directoryData.results); setDirectoryTree(treeData); }
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed");
       } finally {
@@ -58,6 +61,14 @@ export function IntelligencePage() {
     })();
     return () => { cancelled = true; };
   }, [ready, repoId, activityDays, activityContributor]);
+
+  const handleTreePathChange = (path: string) => {
+    setTreeLoading(true);
+    getDirectoryTree(repoId, path)
+      .then((res) => setDirectoryTree(res))
+      .catch(() => {})
+      .finally(() => setTreeLoading(false));
+  };
 
   const bottlenecks = reviews?.nodes.filter((n) => n.is_bottleneck) ?? [];
 
@@ -126,6 +137,7 @@ export function IntelligencePage() {
               )}
 
               {activity && <ActivityCalendar data={activity} onWindowChange={setActivityDays} onContributorChange={setActivityContributor} />}
+              {directoryTree && <CodebaseTreemap data={directoryTree} onPathChange={handleTreePathChange} isLoading={treeLoading} />}
               {directories.length > 0 && <DirectoryOwnershipPanel rows={directories} />}
               {/* File ownership */}
               {ownership.length > 0 && (
