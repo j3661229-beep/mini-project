@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getActivity, getAllCommits, getCodeMetrics, getHeatmap, getOwnership, getReviews, getStatus, getSummary, type ActivityResponse, type CodeMetrics, type Commit, type FileOwnership, type HeatmapResponse, type ReviewGraph, type Summary } from "../api/client";
+import { getActivity, getAllCommits, getCodeMetrics, getDirectoryTree, getHeatmap, getOwnership, getReviews, getStatus, getSummary, type ActivityResponse, type CodeMetrics, type Commit, type DirectoryTreeResponse, type FileOwnership, type HeatmapResponse, type ReviewGraph, type Summary } from "../api/client";
 import { AppShell } from "../components/shell/AppShell";
 import { CommandPalette } from "../components/CommandPalette";
 import { MetricCard } from "../components/ui/MetricCard";
@@ -11,6 +11,7 @@ import { CommitGraph } from "../components/CommitGraph";
 import { BranchTimeline } from "../components/BranchTimeline";
 import { ActivityCalendar } from "../components/ActivityCalendar";
 import { HeatmapPanel } from "../components/HeatmapPanel";
+import { CodebaseTreemap } from "../components/CodebaseTreemap";
 import { usePolling } from "../hooks/usePolling";
 import { useCommandPalette } from "../hooks/useCommandPalette";
 import { FileWarning, Users, Eye, ShieldAlert, ArrowRight, Code2, Bot, GitPullRequest } from "lucide-react";
@@ -31,6 +32,8 @@ export function Dashboard({ section }: DashboardProps) {
   const [activityDays, setActivityDays] = useState(365);
   const [activityContributor, setActivityContributor] = useState<string | undefined>();
   const [codeMetrics, setCodeMetrics] = useState<CodeMetrics | null>(null);
+  const [directoryTree, setDirectoryTree] = useState<DirectoryTreeResponse | null>(null);
+  const [treeLoading, setTreeLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const [loadingActivity, setLoadingActivity] = useState(false);
@@ -42,12 +45,20 @@ export function Dashboard({ section }: DashboardProps) {
     if (!ready) return;
     let cancelled = false;
     setLoadingData(true); setLoadError(null);
-    Promise.all([getSummary(repoId), getAllCommits(repoId), getOwnership(repoId), getReviews(repoId), getHeatmap(repoId), getCodeMetrics(repoId)])
-      .then(([nextSummary, nextCommits, nextOwnership, nextReviews, nextHeatmap, nextCodeMetrics]) => { if (cancelled) return; setSummary(nextSummary); setCommits(nextCommits); setOwnership(nextOwnership); setReviews(nextReviews); setHeatmap(nextHeatmap); setCodeMetrics(nextCodeMetrics); })
+    Promise.all([getSummary(repoId), getAllCommits(repoId), getOwnership(repoId), getReviews(repoId), getHeatmap(repoId), getCodeMetrics(repoId), getDirectoryTree(repoId)])
+      .then(([nextSummary, nextCommits, nextOwnership, nextReviews, nextHeatmap, nextCodeMetrics, nextTree]) => { if (cancelled) return; setSummary(nextSummary); setCommits(nextCommits); setOwnership(nextOwnership); setReviews(nextReviews); setHeatmap(nextHeatmap); setCodeMetrics(nextCodeMetrics); setDirectoryTree(nextTree); })
       .catch((error: unknown) => { if (!cancelled) setLoadError(error instanceof Error ? error.message : "Failed to load repository intelligence."); })
       .finally(() => { if (!cancelled) setLoadingData(false); });
     return () => { cancelled = true; };
   }, [ready, repoId]);
+
+  const handleTreePathChange = (path: string) => {
+    setTreeLoading(true);
+    getDirectoryTree(repoId, path)
+      .then((res) => setDirectoryTree(res))
+      .catch(() => {})
+      .finally(() => setTreeLoading(false));
+  };
 
   useEffect(() => {
     if (!ready) return;
@@ -74,12 +85,14 @@ export function Dashboard({ section }: DashboardProps) {
       <section className="dashboard-insight-grid"><div className="dashboard-insight-card">{loadingActivity ? <LoadingState message="Preparing activity timeline" /> : activity ? <ActivityCalendar data={activity} onWindowChange={setActivityDays} onContributorChange={setActivityContributor} /> : <div className="panel dashboard-empty-panel">No activity data available yet.</div>}</div>
         <aside className="panel dashboard-insight-card dashboard-insight-card--stack"><DashboardList title="Top contributors" subtitle="By commits in the selected activity window." icon={<Users size={16} />} empty="No contributor activity available.">{topContributors.map((contributor) => <div className="dashboard-list__row" key={contributor.author_name}><span className="dashboard-avatar">{contributor.author_name.slice(0, 2).toUpperCase()}</span><span className="dashboard-list__name">{contributor.author_name}</span><strong>{contributor.commits.toLocaleString()}</strong></div>)}</DashboardList><DashboardList title="Most active files" subtitle="Highest recorded line churn." icon={<FileWarning size={16} />} empty="No file churn data available.">{activeFiles.map((file) => <div className="dashboard-list__row" key={file.file_path} title={file.file_path}><span className={file.bus_factor_risk ? "dashboard-risk-dot dashboard-risk-dot--warning" : "dashboard-risk-dot"} /><span className="dashboard-list__name dashboard-list__name--mono">{file.file_path}</span><strong>{file.total_churn.toLocaleString()}</strong></div>)}</DashboardList></aside>
       </section>
+      {directoryTree && <CodebaseTreemap data={directoryTree} onPathChange={handleTreePathChange} isLoading={treeLoading} />}
       {heatmap && <HeatmapPanel data={heatmap} ownership={ownership} />}
       <CommitGraph commits={commits} />
       {(section === "branches" || !section) && <BranchTimeline commits={commits} />}
       <QuickNav repoId={repoId} summary={summary} />
     </div>}
   </main></AppShell></>;
+
 }
 
 function DashboardList({ title, subtitle, icon, empty, children }: { title: string; subtitle: string; icon: React.ReactNode; empty: string; children: React.ReactNode[] }) {
