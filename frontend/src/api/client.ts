@@ -272,6 +272,52 @@ export function getActivity(id: number, days = 365, contributor?: string) { cons
 export function getDirectoryOwnership(id: number, depth = 1) { return request<DirectoryOwnershipResponse>(`/repositories/${id}/directory-ownership/?depth=${depth}`); }
 export function getRiskReportPdfUrl(id: number) { return `${API_BASE}/repositories/${id}/risk-report/pdf/`; }
 
+export interface TreeNode {
+  name: string;
+  path: string;
+  type: "directory" | "file";
+  value: number;
+  total_churn: number;
+  insertions: number;
+  deletions: number;
+  file_count: number;
+  at_risk_file_count: number;
+  top_contributor: string;
+  top_contributor_share: number;
+  contributor_count: number;
+  bus_factor_risk: boolean;
+  commit_count?: number;
+  children?: TreeNode[];
+}
+
+export interface TreeBreadcrumb {
+  name: string;
+  path: string;
+}
+
+export interface TreeSummary {
+  root_path: string;
+  total_files: number;
+  at_risk_files: number;
+  total_churn: number;
+  risk_ratio: number;
+}
+
+export interface DirectoryTreeResponse {
+  tree: TreeNode;
+  breadcrumbs: TreeBreadcrumb[];
+  summary: TreeSummary;
+}
+
+export function getDirectoryTree(id: number, path = "", depth = 10, minChurn = 0) {
+  const query = new URLSearchParams();
+  if (path) query.set("path", path);
+  if (depth) query.set("depth", String(depth));
+  if (minChurn) query.set("min_churn", String(minChurn));
+  const qs = query.toString() ? `?${query.toString()}` : "";
+  return request<DirectoryTreeResponse>(`/repositories/${id}/directory-tree/${qs}`);
+}
+
 // ── Generative RAG & AI Assistant ────────────────────────────────
 export interface RAGSource {
   id: number;
