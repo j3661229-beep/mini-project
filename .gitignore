@@ -12,4 +12,5 @@ backend/frontend/
 .mypy_cache/
 node_modules/
 frontend/dist/
+*.tsbuildinfo
 .DS_Store
