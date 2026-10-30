@@ -23,6 +23,7 @@ from repositories.models import (
     CodeSymbol,
     CodeImport,
     CodeChunk,
+    SecurityFinding,
 )
 import logging
 import re
@@ -48,10 +49,10 @@ from repositories.serializers import (
     SourceFileSerializer,
     SummarySerializer,
     CodeSymbolSerializer,
-
     CodeImportSerializer,
     ChatQuerySerializer,
     ChatResponseSerializer,
+    SecurityFindingSerializer,
 )
 from repositories.tasks import ingest_repository
 
@@ -426,11 +427,48 @@ class RepositoryViewSet(
 
     @action(detail=True, methods=["get"], url_path="symbols")
     def symbols(self, request, pk=None):
+        from django.db.models import OuterRef, Subquery
+
         repo = self.get_object()
-        qs = CodeSymbol.objects.filter(parsing__source_content__files__repository=repo).distinct().order_by("id")
-        
+        file_path_sq = (
+            SourceFile.objects.filter(
+                repository=repo,
+                source_content_id=OuterRef("parsing__source_content_id"),
+            )
+            .order_by("id")
+            .values("file_path")[:1]
+        )
+        file_id_sq = (
+            SourceFile.objects.filter(
+                repository=repo,
+                source_content_id=OuterRef("parsing__source_content_id"),
+            )
+            .order_by("id")
+            .values("id")[:1]
+        )
+        qs = (
+            CodeSymbol.objects.filter(parsing__source_content__files__repository=repo)
+            .select_related("parsing")
+            .annotate(file_path=Subquery(file_path_sq), file_id=Subquery(file_id_sq))
+            .distinct()
+            .order_by("id")
+        )
+
+        symbol_type = (request.query_params.get("type") or "").strip().lower()
+        if symbol_type in ("class", "function", "method"):
+            qs = qs.filter(symbol_type=symbol_type)
+
+        q = (request.query_params.get("q") or "").strip()
+        if q:
+            qs = qs.filter(
+                db_models.Q(name__icontains=q)
+                | db_models.Q(qualified_name__icontains=q)
+                | db_models.Q(signature__icontains=q)
+            )
+
         paginator = CursorPagination()
         paginator.ordering = "id"
+        paginator.page_size = 50
         page = paginator.paginate_queryset(qs, request, view=self)
         serializer = CodeSymbolSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
@@ -464,6 +502,62 @@ class RepositoryViewSet(
         page = paginator.paginate_queryset(qs, request, view=self)
         serializer = CodeSymbolSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
+
+    @action(detail=True, methods=["get", "post"], url_path="security")
+    def security(self, request, pk=None):
+        """
+        Return security findings for a repository.
+        POST (or GET ?refresh=1) re-runs the static scanner over stored source.
+        """
+        from repositories.services.security import scan_and_persist_security, security_summary
+
+        repo = self.get_object()
+        refresh = request.method == "POST" or request.query_params.get("refresh") in (
+            "1",
+            "true",
+            "True",
+        )
+        existing = SecurityFinding.objects.filter(repository=repo)
+        if refresh or not existing.exists():
+            # Lazy scan for repos ingested before this feature existed
+            has_source = SourceFile.objects.filter(
+                repository=repo, source_content__isnull=False
+            ).exists()
+            if has_source:
+                scan_and_persist_security(repo)
+
+        qs = SecurityFinding.objects.filter(repository=repo)
+
+        severity = (request.query_params.get("severity") or "").strip().lower()
+        if severity in {c.value for c in SecurityFinding.Severity}:
+            qs = qs.filter(severity=severity)
+
+        category = (request.query_params.get("category") or "").strip().lower()
+        if category in {c.value for c in SecurityFinding.Category}:
+            qs = qs.filter(category=category)
+
+        q = (request.query_params.get("q") or "").strip()
+        if q:
+            qs = qs.filter(
+                db_models.Q(title__icontains=q)
+                | db_models.Q(file_path__icontains=q)
+                | db_models.Q(rule_id__icontains=q)
+                | db_models.Q(evidence__icontains=q)
+            )
+
+        findings = list(qs.order_by("severity", "file_path", "line_number")[:500])
+        # Severity sort isn't alphabetical — reorder in Python for UX
+        order = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+        findings.sort(
+            key=lambda f: (order.get(f.severity, 9), f.file_path, f.line_number)
+        )
+
+        return Response(
+            {
+                "summary": security_summary(findings),
+                "findings": SecurityFindingSerializer(findings, many=True).data,
+            }
+        )
 
     @action(detail=True, methods=["get"], url_path="code-metrics")
     def code_metrics(self, request, pk=None):

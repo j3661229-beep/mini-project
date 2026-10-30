@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Search, LayoutDashboard, GitGraph, Eye, Code2, Users, Sparkles, X, Bot, GitPullRequest } from "lucide-react";
+import { Search, LayoutDashboard, GitGraph, Eye, Code2, Users, Sparkles, X, Bot, GitPullRequest, Lock } from "lucide-react";
 
 
 interface CommandItem {
@@ -36,7 +36,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           { id: "collaboration", label: "Collaboration", description: "Reviews & contributor graph", icon: <Eye size={14} />, action: () => nav(`/repo/${id}/collaboration`) },
 
           { id: "code", label: "Code Explorer", description: "Browse source files", icon: <Code2 size={14} />, action: () => nav(`/repo/${id}/code`) },
+          { id: "symbols", label: "Symbols", description: "AST classes, functions & methods", icon: <Sparkles size={14} />, action: () => nav(`/repo/${id}/symbols`) },
           { id: "search", label: "Semantic Search", description: "AI-powered code search", icon: <Sparkles size={14} />, action: () => nav(`/repo/${id}/search`) },
+          { id: "security", label: "Security", description: "Secrets & risky pattern scan", icon: <Lock size={14} />, action: () => nav(`/repo/${id}/security`) },
           { id: "intelligence", label: "Intelligence", description: "Ownership & risk analysis", icon: <Users size={14} />, action: () => nav(`/repo/${id}/intelligence`) },
         ]
       : []),

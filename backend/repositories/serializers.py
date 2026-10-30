@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from repositories.models import (
     Commit, FileOwnership, Repository, SourceFile, PullRequest, PullRequestFile,
-    PRReview, CodeParsing, CodeSymbol, CodeImport
+    PRReview, CodeParsing, CodeSymbol, CodeImport, SecurityFinding,
 )
 from repositories.services.url_validation import InvalidRepoURL, parse_github_url
 
@@ -138,6 +138,10 @@ class SourceFileDetailSerializer(SourceFileSerializer):
 
 
 class CodeSymbolSerializer(serializers.ModelSerializer):
+    language = serializers.CharField(source="parsing.language", read_only=True)
+    file_path = serializers.CharField(read_only=True, required=False, allow_null=True)
+    file_id = serializers.IntegerField(read_only=True, required=False, allow_null=True)
+
     class Meta:
         model = CodeSymbol
         fields = [
@@ -151,6 +155,9 @@ class CodeSymbolSerializer(serializers.ModelSerializer):
             "start_column",
             "end_column",
             "parent",
+            "language",
+            "file_path",
+            "file_id",
         ]
 
 
@@ -164,6 +171,24 @@ class CodeImportSerializer(serializers.ModelSerializer):
             "alias",
             "start_line",
         ]
+
+
+class SecurityFindingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SecurityFinding
+        fields = [
+            "id",
+            "file_path",
+            "category",
+            "severity",
+            "rule_id",
+            "title",
+            "description",
+            "line_number",
+            "evidence",
+            "created_at",
+        ]
+        read_only_fields = fields
 
 
 class PullRequestFileSerializer(serializers.ModelSerializer):

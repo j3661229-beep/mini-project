@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Commit, CommitFile, FileOwnership, PRReview, PullRequest, Repository
+from .models import (
+    Commit,
+    CommitFile,
+    FileOwnership,
+    PRReview,
+    PullRequest,
+    Repository,
+    SecurityFinding,
+)
 
 
 @admin.register(Repository)
@@ -49,3 +57,11 @@ class FileOwnershipAdmin(admin.ModelAdmin):
     list_filter = ("bus_factor_risk",)
     search_fields = ("file_path", "top_contributor")
     raw_id_fields = ("repository",)
+
+
+@admin.register(SecurityFinding)
+class SecurityFindingAdmin(admin.ModelAdmin):
+    list_display = ("severity", "category", "title", "file_path", "line_number", "repository")
+    list_filter = ("severity", "category")
+    search_fields = ("title", "file_path", "rule_id", "evidence")
+    raw_id_fields = ("repository", "source_file")

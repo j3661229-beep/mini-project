@@ -228,14 +228,71 @@ export interface CodeSymbol {
   start_column: number;
   end_column: number;
   parent: number | null;
+  language?: string;
+  file_path?: string | null;
+  file_id?: number | null;
 }
 export interface PaginatedSymbols {
   next: string | null;
   previous: string | null;
   results: CodeSymbol[];
 }
+export function getSymbols(
+  repoId: number,
+  opts?: { cursor?: string | null; type?: string; q?: string }
+) {
+  const params = new URLSearchParams();
+  if (opts?.cursor) params.set("cursor", opts.cursor);
+  if (opts?.type) params.set("type", opts.type);
+  if (opts?.q) params.set("q", opts.q);
+  const qs = params.toString();
+  return request<PaginatedSymbols>(`/repositories/${repoId}/symbols/${qs ? `?${qs}` : ""}`);
+}
 export function getFileSymbols(repoId: number, fileId: number) {
   return request<PaginatedSymbols>(`/repositories/${repoId}/files/${fileId}/symbols/`);
+}
+
+// ── Security ─────────────────────────────────────────────────────
+export interface SecurityFinding {
+  id: number;
+  file_path: string;
+  category: string;
+  severity: string;
+  rule_id: string;
+  title: string;
+  description: string;
+  line_number: number;
+  evidence: string;
+  created_at: string;
+}
+export interface SecuritySummary {
+  total_findings: number;
+  by_severity: Record<string, number>;
+  by_category: Record<string, number>;
+  files_affected: number;
+}
+export interface SecurityResponse {
+  summary: SecuritySummary;
+  findings: SecurityFinding[];
+}
+export function getSecurity(
+  repoId: number,
+  opts?: { severity?: string; category?: string; q?: string; refresh?: boolean }
+) {
+  const params = new URLSearchParams();
+  if (opts?.severity) params.set("severity", opts.severity);
+  if (opts?.category) params.set("category", opts.category);
+  if (opts?.q) params.set("q", opts.q);
+  if (opts?.refresh) params.set("refresh", "1");
+  const qs = params.toString();
+  return request<SecurityResponse>(
+    `/repositories/${repoId}/security/${qs ? `?${qs}` : ""}`
+  );
+}
+export function refreshSecurity(repoId: number) {
+  return request<SecurityResponse>(`/repositories/${repoId}/security/`, {
+    method: "POST",
+  });
 }
 
 // ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Semantic search ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬
@@ -479,4 +536,4 @@ export function generateAIPRReview(
     { method: "POST", body: JSON.stringify({}) }
   );
 }
-
+

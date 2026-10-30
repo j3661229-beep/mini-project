@@ -9,6 +9,8 @@ import { CommitsPage } from "./pages/CommitsPage";
 import { ChatPage } from "./pages/ChatPage";
 import { PullRequestsPage } from "./pages/PullRequestsPage";
 import { PullRequestDetailPage } from "./pages/PullRequestDetailPage";
+import { SymbolsPage } from "./pages/SymbolsPage";
+import { SecurityPage } from "./pages/SecurityPage";
 
 export default function App() {
   return (
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="/repo/:id/prs/:prNumber" element={<PullRequestDetailPage />} />
         <Route path="/repo/:id/collaboration" element={<CollaborationPage />} />
         <Route path="/repo/:id/code" element={<CodeExplorerPage />} />
+        <Route path="/repo/:id/symbols" element={<SymbolsPage />} />
+        <Route path="/repo/:id/security" element={<SecurityPage />} />
         <Route path="/repo/:id/search" element={<SemanticSearchPage />} />
         <Route path="/repo/:id/chat" element={<ChatPage />} />
         <Route path="/repo/:id/intelligence" element={<IntelligencePage />} />

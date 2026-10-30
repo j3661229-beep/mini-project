@@ -48,6 +48,8 @@ With the fundamental AI and Generative RAG layers achieved:
 - ✓ Directory-level ownership and bus-factor rollups from recorded commit-file churn.
 - ✓ Interactive zoomable Treemap & directory hierarchy drill-down navigation with bus-factor risk heat mapping and path breadcrumbs.
 - ✓ JSON and paginated PDF repository risk reports using only stored analysis data.
+- ✓ Symbols explorer UI (`/repo/:id/symbols`) with type filters, search, metrics cards, and paginated AST symbol listing.
+- ✓ Security Intelligence (`/repo/:id/security`): static secret scanning + risky-pattern detection with severity/category filters and redacted evidence.
 
 ### In progress
 
@@ -61,4 +63,4 @@ With the fundamental AI and Generative RAG layers achieved:
 
 - GitHub OAuth and private repository ingestion.
 - Team workspaces, organization cache, alerts, GitHub Action checks, and multi-repository intelligence.
-- Automated PR review workflows.
+- Automated PR review workflows.

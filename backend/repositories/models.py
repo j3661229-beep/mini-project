@@ -367,3 +367,51 @@ class CodeImport(models.Model):
 
     def __str__(self) -> str:
         return f"import {self.imported_module}"
+
+
+class SecurityFinding(models.Model):
+    class Category(models.TextChoices):
+        SECRET = "secret", "Secret"
+        VULNERABILITY = "vulnerability", "Vulnerability"
+        MISCONFIG = "misconfig", "Misconfiguration"
+
+    class Severity(models.TextChoices):
+        CRITICAL = "critical", "Critical"
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+        LOW = "low", "Low"
+        INFO = "info", "Info"
+
+    repository = models.ForeignKey(
+        Repository,
+        on_delete=models.CASCADE,
+        related_name="security_findings",
+        db_index=True,
+    )
+    source_file = models.ForeignKey(
+        SourceFile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="security_findings",
+    )
+    file_path = models.CharField(max_length=1000)
+    category = models.CharField(max_length=32, choices=Category.choices)
+    severity = models.CharField(max_length=16, choices=Severity.choices)
+    rule_id = models.CharField(max_length=100)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    line_number = models.IntegerField(default=0)
+    evidence = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["repository", "severity"]),
+            models.Index(fields=["repository", "category"]),
+            models.Index(fields=["repository", "file_path"]),
+        ]
+        ordering = ["-id"]
+
+    def __str__(self) -> str:
+        return f"{self.severity}:{self.rule_id} @ {self.file_path}"

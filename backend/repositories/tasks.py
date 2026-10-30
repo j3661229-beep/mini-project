@@ -27,6 +27,7 @@ from repositories.models import (
     CodeSymbol,
     CodeImport,
     CodeChunk,
+    SecurityFinding,
 )
 from repositories.services.ast_parser import parse_code
 from repositories.services.chunking import generate_ast_chunks
@@ -424,11 +425,22 @@ def _run_analysis(repo: Repository) -> None:
             for r in review_qs
         ]
     )
+    # Security heuristics over persisted source content (secrets + risky patterns)
+    try:
+        from repositories.services.security import scan_and_persist_security
+
+        security_findings = scan_and_persist_security(repo)
+        security_count = len(security_findings)
+    except Exception:
+        logger.exception("Security scan failed for %s", repo)
+        security_count = SecurityFinding.objects.filter(repository=repo).count()
+
     logger.info(
-        "Analysis complete for %s: %s ownership rows, %s review edges",
+        "Analysis complete for %s: %s ownership rows, %s review edges, %s security findings",
         repo,
         len(ownership),
         len(edges),
+        security_count,
     )
 
 @shared_task

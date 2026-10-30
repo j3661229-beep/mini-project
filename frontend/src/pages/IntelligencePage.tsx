@@ -147,12 +147,33 @@ export function IntelligencePage() {
                 </section>
               )}
 
-              {/* Coming soon section */}
+              {/* Related / upcoming */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+                <a
+                  href={`/repo/${repoId}/security`}
+                  style={{
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "10px",
+                    padding: "20px",
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", color: "var(--color-red)" }}>
+                    <Lock size={16} />
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Security Intelligence</span>
+                  </div>
+                  <p style={{ margin: "0 0 12px", fontSize: "13px", color: "var(--color-muted)" }}>
+                    Secret scanning and risky pattern detection.
+                  </p>
+                  <span style={{ fontSize: "11px", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.35)", borderRadius: "20px", padding: "3px 10px", color: "var(--color-green)" }}>
+                    Available
+                  </span>
+                </a>
                 {[
-                  { icon: <Lock size={16} />, title: "Security Intelligence", desc: "Vulnerability detection and secret scanning.", color: "var(--color-red)" },
                   { icon: <TrendingUp size={16} />, title: "ML Change Risk", desc: "Predict risky diffs before merge.", color: "var(--color-yellow)" },
-                  { icon: <Bot size={16} />, title: "AI PR Reviewer", desc: "Automated review suggestions.", color: "var(--color-purple)" },
+                  { icon: <Bot size={16} />, title: "AI PR Reviewer", desc: "Automated review suggestions on the PRs page.", color: "var(--color-purple)" },
                 ].map((item) => (
                   <div
                     key={item.title}
@@ -161,7 +182,7 @@ export function IntelligencePage() {
                       border: "1px solid var(--color-border)",
                       borderRadius: "10px",
                       padding: "20px",
-                      opacity: 0.6,
+                      opacity: item.title === "AI PR Reviewer" ? 1 : 0.6,
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", color: item.color }}>
@@ -170,7 +191,7 @@ export function IntelligencePage() {
                     </div>
                     <p style={{ margin: "0 0 12px", fontSize: "13px", color: "var(--color-muted)" }}>{item.desc}</p>
                     <span style={{ fontSize: "11px", background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: "20px", padding: "3px 10px", color: "var(--color-muted)" }}>
-                      Coming soon
+                      {item.title === "AI PR Reviewer" ? "See Pull Requests" : "Coming soon"}
                     </span>
                   </div>
                 ))}

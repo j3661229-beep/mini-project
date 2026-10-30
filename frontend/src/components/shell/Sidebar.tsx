@@ -61,7 +61,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           title: "Code",
           items: [
             { label: "Explorer", to: `/repo/${id}/code`, icon: <Code2 size={15} /> },
-            { label: "Symbols", to: `/repo/${id}/symbols`, icon: <Sparkles size={15} />, soon: true },
+            { label: "Symbols", to: `/repo/${id}/symbols`, icon: <Sparkles size={15} /> },
             { label: "Semantic Search", to: `/repo/${id}/search`, icon: <Search size={15} /> },
           ],
         },
@@ -71,7 +71,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             { label: "AI Assistant", to: `/repo/${id}/chat`, icon: <Bot size={15} /> },
             { label: "Ownership", to: `/repo/${id}/intelligence`, icon: <Users size={15} /> },
             { label: "Risk Analysis", to: `/repo/${id}/intelligence`, icon: <ShieldAlert size={15} /> },
-            { label: "Security", to: `/repo/${id}/intelligence`, icon: <Lock size={15} />, soon: true },
+            { label: "Security", to: `/repo/${id}/security`, icon: <Lock size={15} /> },
             { label: "Risk Prediction", to: `/repo/${id}/intelligence`, icon: <TrendingUp size={15} />, soon: true },
           ],
         },
