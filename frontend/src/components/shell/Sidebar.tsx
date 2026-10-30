@@ -72,7 +72,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             { label: "Ownership", to: `/repo/${id}/intelligence`, icon: <Users size={15} /> },
             { label: "Risk Analysis", to: `/repo/${id}/intelligence`, icon: <ShieldAlert size={15} /> },
             { label: "Security", to: `/repo/${id}/security`, icon: <Lock size={15} /> },
-            { label: "Risk Prediction", to: `/repo/${id}/intelligence`, icon: <TrendingUp size={15} />, soon: true },
+            { label: "Risk Prediction", to: `/repo/${id}/risk`, icon: <TrendingUp size={15} /> },
           ],
         },
       ]

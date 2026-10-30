@@ -171,30 +171,47 @@ export function IntelligencePage() {
                     Available
                   </span>
                 </a>
-                {[
-                  { icon: <TrendingUp size={16} />, title: "ML Change Risk", desc: "Predict risky diffs before merge.", color: "var(--color-yellow)" },
-                  { icon: <Bot size={16} />, title: "AI PR Reviewer", desc: "Automated review suggestions on the PRs page.", color: "var(--color-purple)" },
-                ].map((item) => (
-                  <div
-                    key={item.title}
-                    style={{
-                      background: "var(--color-surface)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "10px",
-                      padding: "20px",
-                      opacity: item.title === "AI PR Reviewer" ? 1 : 0.6,
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", color: item.color }}>
-                      {item.icon}
-                      <span style={{ fontWeight: 600, fontSize: "14px" }}>{item.title}</span>
-                    </div>
-                    <p style={{ margin: "0 0 12px", fontSize: "13px", color: "var(--color-muted)" }}>{item.desc}</p>
-                    <span style={{ fontSize: "11px", background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: "20px", padding: "3px 10px", color: "var(--color-muted)" }}>
-                      {item.title === "AI PR Reviewer" ? "See Pull Requests" : "Coming soon"}
-                    </span>
+                <a
+                  href={`/repo/${repoId}/risk`}
+                  style={{
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "10px",
+                    padding: "20px",
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", color: "var(--color-yellow)" }}>
+                    <TrendingUp size={16} />
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>Change Risk Prediction</span>
                   </div>
-                ))}
+                  <p style={{ margin: "0 0 12px", fontSize: "13px", color: "var(--color-muted)" }}>
+                    Rank files and PRs by predicted change risk.
+                  </p>
+                  <span style={{ fontSize: "11px", background: "rgba(52,211,153,0.12)", border: "1px solid rgba(52,211,153,0.35)", borderRadius: "20px", padding: "3px 10px", color: "var(--color-green)" }}>
+                    Available
+                  </span>
+                </a>
+                <div
+                  style={{
+                    background: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "10px",
+                    padding: "20px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", color: "var(--color-purple)" }}>
+                    <Bot size={16} />
+                    <span style={{ fontWeight: 600, fontSize: "14px" }}>AI PR Reviewer</span>
+                  </div>
+                  <p style={{ margin: "0 0 12px", fontSize: "13px", color: "var(--color-muted)" }}>
+                    Automated review suggestions on the PRs page.
+                  </p>
+                  <span style={{ fontSize: "11px", background: "var(--color-surface-2)", border: "1px solid var(--color-border)", borderRadius: "20px", padding: "3px 10px", color: "var(--color-muted)" }}>
+                    See Pull Requests
+                  </span>
+                </div>
               </div>
             </div>
           )}

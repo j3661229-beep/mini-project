@@ -11,6 +11,7 @@ import { PullRequestsPage } from "./pages/PullRequestsPage";
 import { PullRequestDetailPage } from "./pages/PullRequestDetailPage";
 import { SymbolsPage } from "./pages/SymbolsPage";
 import { SecurityPage } from "./pages/SecurityPage";
+import { RiskPredictionPage } from "./pages/RiskPredictionPage";
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="/repo/:id/code" element={<CodeExplorerPage />} />
         <Route path="/repo/:id/symbols" element={<SymbolsPage />} />
         <Route path="/repo/:id/security" element={<SecurityPage />} />
+        <Route path="/repo/:id/risk" element={<RiskPredictionPage />} />
         <Route path="/repo/:id/search" element={<SemanticSearchPage />} />
         <Route path="/repo/:id/chat" element={<ChatPage />} />
         <Route path="/repo/:id/intelligence" element={<IntelligencePage />} />

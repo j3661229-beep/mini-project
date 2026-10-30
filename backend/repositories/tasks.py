@@ -61,8 +61,11 @@ def _update_ingestion(
     repo.ingestion_progress = progress
     repo.ingestion_heartbeat_at = now
     repo.save(update_fields=["ingestion_stage", "ingestion_progress", "ingestion_stage_started_at", "ingestion_heartbeat_at"])
-# Stale lock threshold â€” if a lock is older than this, consider it abandoned.
-LOCK_STALE_MINUTES = 30
+# Stale lock threshold — if a lock is older than this, consider it abandoned.
+# Keep this short for local eager/thread mode where server reloads kill workers.
+LOCK_STALE_MINUTES = 5
+# If processing has no recent heartbeat, treat the job as dead even before lock expiry.
+HEARTBEAT_STALE_MINUTES = 3
 
 
 def _acquire_lock(repo_id: int) -> bool:
@@ -88,6 +91,59 @@ def _acquire_lock(repo_id: int) -> bool:
 def _release_lock(repo_id: int) -> None:
     """Release the ingestion lock for the given repository."""
     Repository.objects.filter(pk=repo_id).update(ingestion_locked_at=None)
+
+
+def reclaim_stale_ingestion(repo: Repository) -> bool:
+    """
+    If a repository is stuck in pending/processing with a stale lock or
+    missing heartbeat (common after Django autoreload kills daemon threads),
+    clear the lock and mark it failed so a new analyze can run.
+    Returns True if the repo was reclaimed.
+    """
+    if repo.status not in (Repository.Status.PENDING, Repository.Status.PROCESSING):
+        return False
+
+    now = timezone.now()
+    lock_stale = (
+        repo.ingestion_locked_at is not None
+        and repo.ingestion_locked_at < now - timedelta(minutes=LOCK_STALE_MINUTES)
+    )
+    heartbeat = repo.ingestion_heartbeat_at
+    heartbeat_stale = heartbeat is None or heartbeat < now - timedelta(
+        minutes=HEARTBEAT_STALE_MINUTES
+    )
+    # No heartbeat shortly after lock → worker likely died before progress updates
+    if (
+        heartbeat is None
+        and repo.ingestion_locked_at is not None
+        and repo.ingestion_locked_at < now - timedelta(minutes=1)
+    ):
+        heartbeat_stale = True
+
+    abandoned = False
+    if repo.ingestion_locked_at is not None and (lock_stale or heartbeat_stale):
+        abandoned = True
+    elif (
+        repo.status == Repository.Status.PROCESSING
+        and repo.ingestion_locked_at is None
+        and heartbeat_stale
+    ):
+        abandoned = True
+
+    if not abandoned:
+        return False
+
+    Repository.objects.filter(pk=repo.pk).update(
+        status=Repository.Status.FAILED,
+        ingestion_stage="failed",
+        ingestion_locked_at=None,
+        error_message=(
+            "Ingestion was interrupted or stalled (stale worker lock/heartbeat). "
+            "Re-submit the repository URL to retry."
+        )[:2000],
+    )
+    repo.refresh_from_db()
+    return True
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=60)
@@ -158,12 +214,26 @@ def ingest_repository(self, repo_id: int) -> dict:
         repo.save(update_fields=["commit_cap_reached"])
 
         # â”€â”€ Step 5: Fetch and upsert PRs + reviews â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        _update_ingestion(repo, stage="reviews", detail="Collecting available pull requests and reviews.")
+        _update_ingestion(repo, stage="reviews", processed=0, total=None, detail="Collecting available pull requests and reviews.")
         try:
-            prs = fetch_pull_requests(repo.owner, repo.name)
+            def pr_progress(processed: int, total: int | None) -> None:
+                _update_ingestion(
+                    repo,
+                    stage="reviews",
+                    processed=processed,
+                    total=total,
+                    detail=f"Fetching pull requests ({processed}{f'/{total}' if total else ''}).",
+                )
+
+            prs = fetch_pull_requests(repo.owner, repo.name, on_progress=pr_progress)
         except RuntimeError as gh_err:
             logger.warning("PR fetch issue for %s: %s", repo, gh_err)
             prs = []
+            _update_ingestion(
+                repo,
+                stage="reviews",
+                detail=f"PR fetch skipped/partial: {gh_err}",
+            )
 
         _upsert_pull_requests(repo, prs)
         _update_ingestion(repo, processed=len(prs), total=len(prs), detail="Pull request and review data updated.")
@@ -178,12 +248,24 @@ def ingest_repository(self, repo_id: int) -> dict:
         repo.last_ingested_at = timezone.now()
         repo.error_message = None
         repo.ingestion_stage = "complete"
-        repo.save(update_fields=["status", "ingestion_stage", "last_ingested_at", "error_message"])
+        repo.ingestion_locked_at = None
+        repo.save(
+            update_fields=[
+                "status",
+                "ingestion_stage",
+                "last_ingested_at",
+                "error_message",
+                "ingestion_locked_at",
+            ]
+        )
         _update_ingestion(repo, stage="complete", detail="Core repository intelligence is ready.")
-        
-        # Trigger incremental parsing asynchronously
-        parse_repository_code.delay(repo_id)
-        
+
+        # Trigger incremental parsing asynchronously (best-effort)
+        try:
+            parse_repository_code.delay(repo_id)
+        except Exception:
+            logger.exception("Failed to enqueue parse_repository_code for %s", repo_id)
+
         return {"ok": True, "repo_id": repo_id}
 
     except Exception as exc:

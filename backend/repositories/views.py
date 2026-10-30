@@ -54,7 +54,7 @@ from repositories.serializers import (
     ChatResponseSerializer,
     SecurityFindingSerializer,
 )
-from repositories.tasks import ingest_repository
+from repositories.tasks import ingest_repository, reclaim_stale_ingestion
 
 
 def enqueue_ingestion(repo_id: int) -> None:
@@ -62,13 +62,16 @@ def enqueue_ingestion(repo_id: int) -> None:
     Always return control to the HTTP handler quickly.
     With CELERY_TASK_ALWAYS_EAGER (no Redis worker), run in a daemon thread
     so the API still returns a job id immediately.
+
+    Prefer non-daemon threads so Django autoreload does not silently kill
+    in-flight clones and leave repositories stuck in `processing`.
     """
     if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
         import threading
 
         threading.Thread(
             target=lambda: ingest_repository.run(repo_id),
-            daemon=True,
+            daemon=False,
             name=f"ingest-repo-{repo_id}",
         ).start()
     else:
@@ -109,16 +112,50 @@ class RepositoryViewSet(
             },
         )
 
-        # Preserve completed analysis on duplicate submissions. Only work that
-        # has not finished successfully is enqueued again.
-        if created or repo.status in (Repository.Status.FAILED, Repository.Status.PENDING):
+        force = str(request.data.get("force", "")).lower() in ("1", "true", "yes")
+        if not created:
+            reclaim_stale_ingestion(repo)
+            repo.refresh_from_db()
+
+        actively_locked = (
+            repo.status == Repository.Status.PROCESSING
+            and repo.ingestion_locked_at is not None
+        )
+
+        # Re-enqueue when new/failed/pending/forced. Never interrupt a live lock.
+        should_enqueue = False
+        if created:
+            should_enqueue = True
+        elif actively_locked and not force:
+            should_enqueue = False
+        elif repo.status in (
+            Repository.Status.FAILED,
+            Repository.Status.PENDING,
+        ):
+            should_enqueue = True
+        elif force:
+            should_enqueue = True
+        elif repo.status == Repository.Status.PROCESSING:
+            # Processing but unlocked = abandoned job
+            should_enqueue = True
+
+        if should_enqueue:
             if not created:
                 repo.status = Repository.Status.PENDING
                 repo.ingestion_stage = "queued"
                 repo.error_message = None
-                repo.save(update_fields=["status", "ingestion_stage", "error_message"])
+                repo.ingestion_locked_at = None
+                repo.save(
+                    update_fields=[
+                        "status",
+                        "ingestion_stage",
+                        "error_message",
+                        "ingestion_locked_at",
+                    ]
+                )
             enqueue_ingestion(repo.id)
 
+        repo.refresh_from_db()
         return Response(
             RepositorySerializer(repo).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
@@ -502,6 +539,13 @@ class RepositoryViewSet(
         page = paginator.paginate_queryset(qs, request, view=self)
         serializer = CodeSymbolSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
+
+    @action(detail=True, methods=["get"], url_path="risk-prediction")
+    def risk_prediction(self, request, pk=None):
+        from repositories.services.risk_prediction import build_risk_prediction
+
+        repo = self.get_object()
+        return Response(build_risk_prediction(repo))
 
     @action(detail=True, methods=["get", "post"], url_path="security")
     def security(self, request, pk=None):

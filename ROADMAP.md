@@ -50,6 +50,8 @@ With the fundamental AI and Generative RAG layers achieved:
 - ✓ JSON and paginated PDF repository risk reports using only stored analysis data.
 - ✓ Symbols explorer UI (`/repo/:id/symbols`) with type filters, search, metrics cards, and paginated AST symbol listing.
 - ✓ Security Intelligence (`/repo/:id/security`): static secret scanning + risky-pattern detection with severity/category filters and redacted evidence.
+- ✓ Change Risk Prediction (`/repo/:id/risk`): heuristic file/PR risk scores from ownership, churn, security findings, and blast radius.
+- ✓ Ingestion resilience: reclaim stale processing locks/heartbeats so Analyze can recover after interrupted clones.
 
 ### In progress
 

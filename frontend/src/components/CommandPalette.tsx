@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Search, LayoutDashboard, GitGraph, Eye, Code2, Users, Sparkles, X, Bot, GitPullRequest, Lock } from "lucide-react";
+import { Search, LayoutDashboard, GitGraph, Eye, Code2, Users, Sparkles, X, Bot, GitPullRequest, Lock, TrendingUp } from "lucide-react";
 
 
 interface CommandItem {
@@ -39,6 +39,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           { id: "symbols", label: "Symbols", description: "AST classes, functions & methods", icon: <Sparkles size={14} />, action: () => nav(`/repo/${id}/symbols`) },
           { id: "search", label: "Semantic Search", description: "AI-powered code search", icon: <Sparkles size={14} />, action: () => nav(`/repo/${id}/search`) },
           { id: "security", label: "Security", description: "Secrets & risky pattern scan", icon: <Lock size={14} />, action: () => nav(`/repo/${id}/security`) },
+          { id: "risk", label: "Risk Prediction", description: "File & PR change-risk scores", icon: <TrendingUp size={14} />, action: () => nav(`/repo/${id}/risk`) },
           { id: "intelligence", label: "Intelligence", description: "Ownership & risk analysis", icon: <Users size={14} />, action: () => nav(`/repo/${id}/intelligence`) },
         ]
       : []),

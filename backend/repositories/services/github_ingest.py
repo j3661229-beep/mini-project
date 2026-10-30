@@ -41,7 +41,12 @@ class ParsedPullRequest:
     files: list[ParsedPullRequestFile] = field(default_factory=list)
 
 
-def fetch_pull_requests(owner: str, name: str, token: str | None = None) -> list[ParsedPullRequest]:
+def fetch_pull_requests(
+    owner: str,
+    name: str,
+    token: str | None = None,
+    on_progress=None,
+) -> list[ParsedPullRequest]:
     """
     Fetch closed/merged PRs and their reviews.
     On rate limit: return whatever was collected and let the caller finish
@@ -51,10 +56,35 @@ def fetch_pull_requests(owner: str, name: str, token: str | None = None) -> list
     # Disable urllib3 retries so 403 rate-limits fail fast instead of multi-hour backoff.
     no_retry = Retry(total=0, redirect=False, raise_on_status=False)
     client = (
-        Github(auth_token, per_page=30, retry=no_retry)
+        Github(auth_token, per_page=20, retry=no_retry, seconds_between_requests=0.0)
         if auth_token
-        else Github(per_page=30, retry=no_retry)
+        else Github(per_page=20, retry=no_retry, seconds_between_requests=0.0)
     )
+
+    # Fail fast when unauthenticated quota is already exhausted.
+    try:
+        rate = client.get_rate_limit()
+        remaining = None
+        if hasattr(rate, "resources") and getattr(rate.resources, "core", None):
+            remaining = rate.resources.core.remaining
+        elif hasattr(rate, "core") and rate.core is not None:
+            remaining = rate.core.remaining
+        elif hasattr(rate, "rate") and rate.rate is not None:
+            remaining = rate.rate.remaining
+        if remaining is not None and remaining < 15:
+            raise RuntimeError(
+                "GitHub API rate limit nearly exhausted. Set GITHUB_TOKEN or retry later."
+            )
+    except RuntimeError:
+        raise
+    except RateLimitExceededException as exc:
+        raise RuntimeError(
+            "GitHub API rate limit exceeded. Set GITHUB_TOKEN or retry later."
+        ) from exc
+    except GithubException:
+        pass
+    except Exception:  # noqa: BLE001
+        pass
 
     try:
         repo = client.get_repo(f"{owner}/{name}")
@@ -68,13 +98,19 @@ def fetch_pull_requests(owner: str, name: str, token: str | None = None) -> list
         raise RuntimeError(f"GitHub API error: {exc.data}") from exc
 
     results: list[ParsedPullRequest] = []
-    pr_cap = 40
+    # Keep PR work bounded so ingestion cannot stall for tens of minutes.
+    pr_cap = 25 if auth_token else 8
 
     try:
         pulls = repo.get_pulls(state="closed", sort="updated", direction="desc")
         for idx, pr in enumerate(pulls):
             if idx >= pr_cap:
                 break
+            if on_progress:
+                try:
+                    on_progress(idx + 1, pr_cap)
+                except Exception:  # noqa: BLE001
+                    pass
             author = pr.user.login if pr.user else "unknown"
             state = "merged" if pr.merged else pr.state
             reviews: list[ParsedReview] = []
@@ -86,6 +122,11 @@ def fetch_pull_requests(owner: str, name: str, token: str | None = None) -> list
                 except RateLimitExceededException:
                     logger.warning("Rate limited while fetching PR details; returning partial PR data")
                     break
+                except GithubException as exc:
+                    if exc.status in (403, 429):
+                        logger.warning("GitHub %s on PR details; returning partial data", exc.status)
+                        break
+                    logger.warning("Skipping details for PR #%s: %s", pr.number, exc)
             results.append(
                 ParsedPullRequest(
                     pr_number=pr.number,
